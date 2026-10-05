@@ -22,7 +22,7 @@ struct UnreasonableTimerApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 980, height: 640)
+        .defaultSize(width: 1180, height: 780)
         .commands {
             TimerCommands(controller: controller, store: store, updater: updater)
         }

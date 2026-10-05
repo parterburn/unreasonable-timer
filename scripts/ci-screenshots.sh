@@ -64,5 +64,16 @@ sleep 3;  capture countdown-7-light
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light
 
+# The lower half of the form (toggle, theme, Start, history): relaunch scrolled to the bottom.
+osascript -e "tell application \"$NAME\" to quit" || true
+sleep 3
+open "$APP" --args -UTWindowFrame "{{60,60},{1280,800}}" -UTSetupScroll bottom
+for _ in $(seq 1 30); do pgrep -f "$NAME.app/Contents/MacOS" >/dev/null && break; sleep 1; done
+sleep 5
+open "untimer://edit?time=600"
+sleep 3;  capture setup-dark-bottom
+open "untimer://edit?time=600&theme=light"
+sleep 3;  capture setup-light-bottom
+
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"

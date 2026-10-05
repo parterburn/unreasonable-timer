@@ -32,6 +32,8 @@ struct CountdownView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        // Edge to edge: the glow, vignette and flash cover the title bar area too.
+        .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { controller.toggle() }
         .focusable()
@@ -45,7 +47,10 @@ struct CountdownView: View {
             hasFocus = true
             wake()
         }
-        .onDisappear { idleTask?.cancel() }
+        .onDisappear {
+            idleTask?.cancel()
+            controller.setWindowChromeVisible(true)
+        }
         .preferredColorScheme(config.theme == .light ? .light : .dark)
     }
 
@@ -87,8 +92,10 @@ struct CountdownView: View {
         }
     }
 
-    /// Shows the hint and cursor on mouse movement; hides both after 2.5 seconds of stillness.
+    /// Shows the hint, cursor and window buttons on mouse movement; hides all three after 2.5
+    /// seconds of stillness, so a presented timer is just the timer.
     private func wake() {
+        if isIdle { controller.setWindowChromeVisible(true) }
         isIdle = false
         idleTask?.cancel()
         idleTask = Task { @MainActor in
@@ -96,6 +103,7 @@ struct CountdownView: View {
             guard !Task.isCancelled else { return }
             isIdle = true
             NSCursor.setHiddenUntilMouseMoves(true)
+            controller.setWindowChromeVisible(false)
         }
     }
 

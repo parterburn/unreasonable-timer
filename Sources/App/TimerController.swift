@@ -192,8 +192,12 @@ final class TimerController: ObservableObject {
         window.styleMask.insert(.fullSizeContentView)
         window.collectionBehavior.insert(.fullScreenPrimary)
         // For scripted screenshots (scripts/ci-screenshots.sh): `-UTWindowFrame "{{x,y},{w,h}}"`.
+        // Applied after SwiftUI has finished placing the window, or it overrides the frame.
         if let frame = UserDefaults.standard.string(forKey: "UTWindowFrame") {
-            window.setFrame(NSRectFromString(frame), display: true)
+            Task { @MainActor [weak window] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                window?.setFrame(NSRectFromString(frame), display: true)
+            }
         }
         applyWindowSettings()
 
@@ -218,6 +222,16 @@ final class TimerController: ObservableObject {
 
     private func applyWindowSettings() {
         mainWindow?.level = UserDefaults.standard.bool(forKey: AppSettings.floatOnTop) ? .floating : .normal
+    }
+
+    /// Fades the traffic-light buttons, so an idle countdown is edge-to-edge timer like the web
+    /// page in fullscreen. They come back on any mouse movement.
+    func setWindowChromeVisible(_ visible: Bool) {
+        guard let titlebar = mainWindow?.standardWindowButton(.closeButton)?.superview else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.3
+            titlebar.animator().alphaValue = visible ? 1 : 0
+        }
     }
 
     /// Fullscreen on the remembered display (see Settings ▸ Present on).

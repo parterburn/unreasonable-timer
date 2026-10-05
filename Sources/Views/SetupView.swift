@@ -68,20 +68,34 @@ struct SetupView: View {
         GeometryReader { geo in
             ZStack {
                 TimerBackground(palette: palette)
-                ScrollView {
-                    card
-                        .frame(width: min(520, geo.size.width * 0.92))
-                        .padding(.vertical, 48)
-                        // Centred when short, scrollable from the top when the lists grow.
-                        .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        card
+                            .frame(width: min(520, geo.size.width * 0.92))
+                            .padding(.vertical, 48)
+                            // Centred when short, scrollable from the top when the lists grow.
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                        Color.clear.frame(height: 1).id("bottom")
+                    }
+                    .scrollIndicators(.never)
+                    .onAppear {
+                        // For scripted screenshots of the lower half (scripts/ci-screenshots.sh).
+                        if UserDefaults.standard.string(forKey: "UTSetupScroll") == "bottom" {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 500_000_000)
+                                proxy.scrollTo("bottom", anchor: .bottom)
+                            }
+                        }
+                    }
                 }
             }
         }
+        // Edge to edge, under the transparent title bar, like the web page.
+        .ignoresSafeArea()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: draft.theme)
         .preferredColorScheme(draft.theme == .light ? .light : .dark)
         .onAppear {
             appeared = true
-            focus = .minutes
             consumePrefill()
         }
         .onChange(of: controller.formPrefill) { _, _ in consumePrefill() }
@@ -153,7 +167,11 @@ struct SetupView: View {
 
     private var header: some View {
         VStack(spacing: 22) {
-            Text("⏳").font(.system(size: 32))
+            // The web title clips the teal text gradient to the emoji, which turns the hourglass
+            // into a teal silhouette; masking the gradient with the emoji does the same.
+            palette.tealText
+                .frame(width: 40, height: 44)
+                .mask { Text("⏳").font(.system(size: 32)) }
             Rectangle()
                 .fill(LinearGradient(colors: [palette.teal(0), palette.teal, palette.teal(0)], startPoint: .leading, endPoint: .trailing))
                 .frame(width: 64, height: 1)
@@ -227,7 +245,7 @@ struct SetupView: View {
         field: SetupField
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            fieldLabel(label).padding(.bottom, 6)
+            fieldLabel(label).padding(.bottom, 6).zIndex(1)
             TextField("", text: text, prompt: Text(placeholder).foregroundStyle(palette.textFaint))
                 .textFieldStyle(.plain)
                 .font(.inter(17.6))
