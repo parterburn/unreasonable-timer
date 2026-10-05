@@ -46,3 +46,49 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             | grep -E "Executed [0-9]+ tests|error:|\*\* TEST"
+      - name: Launch smoke test
+        run: |
+          APP="build/Build/Products/Debug/Unreasonable Timer.app"
+          mkdir -p smoke
+
+          is_running() { pgrep -f "Unreasonable Timer.app/Contents/MacOS" >/dev/null; }
+          wait_for_launch() {
+            for _ in $(seq 1 30); do is_running && return 0; sleep 1; done
+            return 1
+          }
+
+          open "$APP"
+          wait_for_launch || { echo "App did not launch"; exit 1; }
+          sleep 4
+          screencapture -x smoke/1-setup.png || true
+
+          # A link starts a 20-second timer with lead and warning text.
+          open "untimer://start?time=20&lead=Intro&text=Wrap%20up&done=All%20done"
+          sleep 6
+          is_running || { echo "App died after the link"; exit 1; }
+          screencapture -x smoke/2-running.png || true
+
+          sleep 10   # about 4 seconds left: warning state
+          screencapture -x smoke/3-warning.png || true
+
+          sleep 8    # past zero: overtime
+          screencapture -x smoke/4-overtime.png || true
+          is_running || { echo "App died during the countdown"; exit 1; }
+
+          log show --last 3m --style compact --predicate 'process == "Unreasonable Timer"' > smoke/app.log 2>&1 || true
+          osascript -e 'tell application "Unreasonable Timer" to quit' || true
+          sleep 2
+
+          if ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i "unreasonable"; then
+            echo "A crash report was written"
+            cat ~/Library/Logs/DiagnosticReports/*nreasonable* | head -80
+            exit 1
+          fi
+          echo "Smoke test passed"
+      - name: Upload smoke test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test
+          path: smoke/
+          if-no-files-found: ignore
