@@ -86,7 +86,9 @@ In Xcode, use the `UnreasonableTimer` scheme (⌘U). The views and system integr
 ## Releasing
 
 Releases are Developer ID signed and notarized, shipped as a DMG on GitHub Releases, and
-updated in place with [Sparkle](https://sparkle-project.org).
+updated in place with [Sparkle](https://sparkle-project.org). The installed app fetches
+`releases/latest/download/appcast.xml` without logging in, so **this repository must be public**
+(the release script warns if it isn't).
 
 ### One-time setup
 

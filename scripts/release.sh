@@ -81,6 +81,22 @@ Sparkle only offers updates with a higher build number, so bump CURRENT_PROJECT_
   fi
 fi
 
+if [ "$SPARKLE_READY" -eq 1 ]; then
+  # Installed apps fetch the feed and the DMG without logging in, so both must be public, and
+  # the app must be looking at the repo the release is published to.
+  FEED_URL="$(awk '/SUFeedURL:/ { print $2; exit }' project.yml)"
+  if [ "$FEED_URL" != "https://github.com/$REPO/releases/latest/download/appcast.xml" ]; then
+    echo "  WARNING:  SUFeedURL ($FEED_URL) doesn't point at $REPO's releases,"
+    echo "            so installed apps would look for updates somewhere else."
+  fi
+  if command -v gh >/dev/null 2>&1; then
+    VISIBILITY="$(gh repo view "$REPO" --json visibility --jq .visibility 2>/dev/null || true)"
+    if [ -n "$VISIBILITY" ] && [ "$VISIBILITY" != "PUBLIC" ]; then
+      echo "  WARNING:  $REPO is $VISIBILITY. Installed apps can't read its releases until it is public."
+    fi
+  fi
+fi
+
 rm -rf "$ARCHIVE" "$EXPORT_DIR" "$OUT/dmg-staging" "$DMG"
 mkdir -p "$OUT" "$UPDATES"
 
