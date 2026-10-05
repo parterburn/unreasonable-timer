@@ -76,7 +76,9 @@ mkdir -p "$OUT" "$UPDATES"
 step "1/6 Generating the Xcode project"
 xcodegen generate
 
-step "2/6 Archiving (Release, Developer ID)"
+step "2/6 Archiving (Release, unsigned: signing happens in the next step)"
+# No signing identity here: xcodebuild would apply it to every target, including the Swift
+# package targets, and fail with "conflicting provisioning settings".
 xcodebuild archive \
   -project UnreasonableTimer.xcodeproj \
   -scheme "$SCHEME" \
@@ -84,29 +86,15 @@ xcodebuild archive \
   -destination 'generic/platform=macOS' \
   -archivePath "$ARCHIVE" \
   -derivedDataPath "$OUT/DerivedData" \
-  DEVELOPMENT_TEAM="$TEAM_ID" \
-  CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" \
+  CODE_SIGNING_ALLOWED=NO \
   -quiet
 
-step "3/6 Exporting the app"
-cat > "$OUT/ExportOptions.plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>method</key><string>developer-id</string>
-  <key>teamID</key><string>$TEAM_ID</string>
-  <key>signingStyle</key><string>manual</string>
-  <key>signingCertificate</key><string>$DEVELOPER_ID_APPLICATION</string>
-</dict>
-</plist>
-EOF
-xcodebuild -exportArchive \
-  -archivePath "$ARCHIVE" \
-  -exportPath "$EXPORT_DIR" \
-  -exportOptionsPlist "$OUT/ExportOptions.plist" \
-  -quiet
-codesign --verify --deep --strict --verbose=2 "$APP"
+step "3/6 Signing the app (hardened runtime, inside out)"
+ARCHIVED_APP="$(find "$ARCHIVE/Products" -maxdepth 3 -name '*.app' -type d | head -n 1)"
+[ -n "$ARCHIVED_APP" ] || fail "No .app found in $ARCHIVE/Products"
+mkdir -p "$EXPORT_DIR"
+ditto "$ARCHIVED_APP" "$APP"
+scripts/sign-app.sh "$APP" "$DEVELOPER_ID_APPLICATION"
 
 notarize() { # <file>: submit, wait; notarytool exits non-zero if Apple rejects it
   xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait

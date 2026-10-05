@@ -46,18 +46,31 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             | grep -E "Executed [0-9]+ tests|error:|\*\* TEST"
-      - name: Release configuration builds
+      - name: Archive and sign the way release.sh does (ad hoc)
         run: |
           set -o pipefail
-          # What scripts/release.sh archives: optimized, so it can surface errors Debug doesn't.
-          xcodebuild build \
+          # Same unsigned, universal archive as scripts/release.sh, then the same signing
+          # procedure with an ad hoc identity. Only the certificate and notarization differ.
+          xcodebuild archive \
             -project UnreasonableTimer.xcodeproj \
             -scheme UnreasonableTimer \
             -configuration Release \
-            -destination 'platform=macOS' \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/Release.xcarchive \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             -quiet
+          archived="$(find build/Release.xcarchive/Products -maxdepth 3 -name '*.app' -type d | head -n 1)"
+          echo "Archived app: $archived"
+          [ -n "$archived" ]
+          mkdir -p signing-test
+          ditto "$archived" "signing-test/Unreasonable Timer.app"
+          echo "--- architectures ---"
+          lipo -archs "signing-test/Unreasonable Timer.app/Contents/MacOS/Unreasonable Timer"
+          echo "--- nested code ---"
+          find "signing-test/Unreasonable Timer.app/Contents/Frameworks" -maxdepth 6 \( -name '*.xpc' -o -name '*.app' -o -name '*.framework' -o -name Autoupdate \) | sort
+          echo "--- signing ---"
+          scripts/sign-app.sh "signing-test/Unreasonable Timer.app" -
       - name: Sparkle tools are where release.sh looks
         run: |
           for tool in generate_appcast generate_keys; do

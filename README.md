@@ -125,9 +125,13 @@ updated in place with [Sparkle](https://sparkle-project.org).
 
    With one Developer ID Application certificate in your keychain, the script finds the identity
    and team ID itself; otherwise set `DEVELOPER_ID_APPLICATION` (and `TEAM_ID`). It checks your
-   notarization profile first, then archives, exports, signs, notarizes and staples the app, builds
-   and signs the DMG, and notarizes and staples that. If a Sparkle key is configured it also
-   regenerates `release/updates/appcast.xml`; otherwise that step is skipped and you still get a DMG.
+   notarization profile first, then archives unsigned, signs the app inside out with
+   `scripts/sign-app.sh` (hardened runtime, secure timestamp), notarizes and staples it, and builds,
+   signs, notarizes and staples the DMG. Signing is done with `codesign` rather than by
+   `xcodebuild` because an identity passed to `xcodebuild` is applied to every target, including
+   the Swift package dependencies, and the archive then fails. If a Sparkle key is configured it
+   also regenerates `release/updates/appcast.xml`; otherwise that step is skipped and you still
+   get a DMG.
 3. Publish with `PUBLISH=1 scripts/release.sh`, or run the `gh release create` command the script
    prints. Upload `appcast.xml` with every release: the app reads
    `releases/latest/download/appcast.xml`.
