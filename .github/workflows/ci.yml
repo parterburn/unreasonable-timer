@@ -36,6 +36,8 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
+          # No -quiet: the summary lines show how many tests actually ran, since a bundle that
+          # finds zero tests would otherwise pass silently.
           xcodebuild test \
             -project UnreasonableTimer.xcodeproj \
             -scheme UnreasonableTimer \
@@ -43,4 +45,4 @@ jobs:
             -destination 'platform=macOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            -quiet
+            | grep -E "Executed [0-9]+ tests|error:|\*\* TEST"

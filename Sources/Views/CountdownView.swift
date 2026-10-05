@@ -124,14 +124,16 @@ struct CountdownView: View {
 
     /// A brief wash of teal at zero.
     private var flashLayer: some View {
-        EllipticalGradient(
+        // Plain values, not `self`, because the animator's closure isn't main-actor isolated.
+        let reduce = reduceMotion
+        return EllipticalGradient(
             colors: [palette.flashInner, palette.flashOuter],
             center: .center,
             startRadiusFraction: 0,
             endRadiusFraction: 0.7071
         )
         .keyframeAnimator(initialValue: 0.0, trigger: clock.zeroToken) { content, value in
-            content.opacity(reduceMotion ? 0 : value)
+            content.opacity(reduce ? 0 : value)
         } keyframes: { _ in
             KeyframeTrack {
                 LinearKeyframe(0.35, duration: 0.01)
@@ -222,6 +224,10 @@ struct CountdownView: View {
 
     private func digits(size: CGFloat, maxWidth: CGFloat) -> some View {
         let isDoneText = snap.isExpired && !snap.isOvertime
+        // Plain values, not `self`, because the animator's closure isn't main-actor isolated.
+        let isFinal = snap.isFinal
+        let reduce = reduceMotion
+        let palette = self.palette
         return Wave(period: 1.5, active: snap.isWarning && !snap.isFinal) { flash in
             Wave(period: 2.8, active: isDoneText) { pulse in
                 digitsText(size: size, isDoneText: isDoneText, pulse: pulse)
@@ -231,9 +237,9 @@ struct CountdownView: View {
                     .frame(maxWidth: maxWidth)
                     // Each second of the last ten: a small pop from bright teal back to white.
                     .keyframeAnimator(initialValue: 0.0, trigger: clock.tickToken) { content, tick in
-                        let t = (snap.isFinal && !reduceMotion) ? tick : 0
+                        let t = (isFinal && !reduce) ? tick : 0
                         content
-                            .foregroundStyle(digitColor(flash: flash, tick: t))
+                            .foregroundStyle(palette.digitColor(isFinal: isFinal, flash: flash, tick: t))
                             .scaleEffect(1 + 0.05 * t)
                     } keyframes: { _ in
                         KeyframeTrack {
@@ -269,13 +275,6 @@ struct CountdownView: View {
         } else {
             base
         }
-    }
-
-    private func digitColor(flash: Double, tick: Double) -> Color {
-        if snap.isFinal {
-            return palette.textBase.mixed(with: palette.tealBrightBase, by: tick)
-        }
-        return palette.textBase.mixed(with: palette.tealBase, by: flash)
     }
 
     /// Lead and warning text share one cell and cross-fade at 15 seconds, so the swap never

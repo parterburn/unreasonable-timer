@@ -84,6 +84,14 @@ struct Palette {
     /// `rgba(var(--teal-rgb), x)`
     func teal(_ opacity: Double) -> Color { tealBase.color(opacity: opacity) }
 
+    /// Colour of the running digits: they flash between white and teal from 15 seconds, then
+    /// from 10 seconds each tick pops in bright teal and settles back to white.
+    func digitColor(isFinal: Bool, flash: Double, tick: Double) -> Color {
+        isFinal
+            ? textBase.mixed(with: tealBrightBase, by: tick)
+            : textBase.mixed(with: tealBase, by: flash)
+    }
+
     static func forMode(_ mode: TimerThemeMode) -> Palette {
         mode == .light ? light : dark
     }
