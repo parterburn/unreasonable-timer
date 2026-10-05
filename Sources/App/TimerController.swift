@@ -94,11 +94,17 @@ final class TimerController: ObservableObject {
 
     func handle(url: URL) {
         guard url.scheme?.lowercased() == "untimer" else { return }
+        let host = url.host?.lowercased()
         guard let linked = TimerConfig(link: url.absoluteString) else {
+            if host == "edit" { edit() }
             showMainWindow()
             return
         }
-        open(linked, autostart: url.host?.lowercased() != "open")
+        switch host {
+        case "edit": prefillForm(with: linked)   // untimer://edit?… opens the setup form filled in
+        case "open": open(linked, autostart: false)
+        default: open(linked, autostart: true)
+        }
     }
 
     /// Fills the setup form from a copied `/timer` or `untimer://` link.
@@ -185,6 +191,10 @@ final class TimerController: ObservableObject {
         window.isMovableByWindowBackground = true
         window.styleMask.insert(.fullSizeContentView)
         window.collectionBehavior.insert(.fullScreenPrimary)
+        // For scripted screenshots (scripts/ci-screenshots.sh): `-UTWindowFrame "{{x,y},{w,h}}"`.
+        if let frame = UserDefaults.standard.string(forKey: "UTWindowFrame") {
+            window.setFrame(NSRectFromString(frame), display: true)
+        }
         applyWindowSettings()
 
         for observer in windowObservers { NotificationCenter.default.removeObserver(observer) }

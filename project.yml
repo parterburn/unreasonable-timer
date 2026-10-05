@@ -51,6 +51,10 @@ targets:
       path: Resources/Info.plist
       properties:
         CFBundleDisplayName: Unreasonable Timer
+        # Without these XcodeGen writes literal "1.0" / "1", and bumping the versions above would
+        # never reach the app (so Sparkle would never see an update).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "Copyright © Unreasonable Group"
