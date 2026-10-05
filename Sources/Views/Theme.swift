@@ -1,7 +1,7 @@
 import AppKit
 import CoreText
 import SwiftUI
-import TimerEngine
+import TimerCore
 
 /// An sRGB colour that can be tinted or blended (SwiftUI's `Color` can't be interpolated
 /// before macOS 15).

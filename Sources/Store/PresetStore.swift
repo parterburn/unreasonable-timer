@@ -1,5 +1,5 @@
 import Foundation
-import TimerEngine
+import TimerCore
 
 struct NamedPreset: Codable, Identifiable, Hashable {
     var id = UUID()
