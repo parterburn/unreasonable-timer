@@ -46,6 +46,25 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             | grep -E "Executed [0-9]+ tests|error:|\*\* TEST"
+      - name: Release configuration builds
+        run: |
+          set -o pipefail
+          # What scripts/release.sh archives: optimized, so it can surface errors Debug doesn't.
+          xcodebuild build \
+            -project UnreasonableTimer.xcodeproj \
+            -scheme UnreasonableTimer \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+      - name: Sparkle tools are where release.sh looks
+        run: |
+          for tool in generate_appcast generate_keys; do
+            found="$(find build/SourcePackages -type f -name "$tool" -perm -u+x | head -n 1)"
+            echo "$tool: ${found:-MISSING}"
+            [ -n "$found" ] || exit 1
+          done
       - name: Launch smoke test
         run: |
           APP="build/Build/Products/Debug/Unreasonable Timer.app"

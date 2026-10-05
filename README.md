@@ -100,8 +100,10 @@ updated in place with [Sparkle](https://sparkle-project.org).
      --apple-id you@example.com --team-id ABCDE12345
    ```
 
-3. **Sparkle signing keys.** Build once (`xcodegen generate` and build, so Sparkle is
-   downloaded), then run the `generate_keys` tool from the Sparkle package artifacts:
+3. **Sparkle signing keys (optional for a first release).** Without them you still get a signed,
+   notarized DMG, but installed copies can't update themselves. Build once (`xcodegen generate` and
+   build, so Sparkle is downloaded), then run the `generate_keys` tool from the Sparkle package
+   artifacts:
 
    ```sh
    find ~/Library/Developer/Xcode/DerivedData -name generate_keys -path '*Sparkle*' | head -1
@@ -118,13 +120,14 @@ updated in place with [Sparkle](https://sparkle-project.org).
 2. Run:
 
    ```sh
-   DEVELOPER_ID_APPLICATION="Developer ID Application: Unreasonable Group (ABCDE12345)" \
-   TEAM_ID=ABCDE12345 \
    scripts/release.sh
    ```
 
-   It archives, exports, signs, notarizes and staples the app, builds and signs the DMG,
-   notarizes and staples that, then signs the update and regenerates `release/updates/appcast.xml`.
+   With one Developer ID Application certificate in your keychain, the script finds the identity
+   and team ID itself; otherwise set `DEVELOPER_ID_APPLICATION` (and `TEAM_ID`). It checks your
+   notarization profile first, then archives, exports, signs, notarizes and staples the app, builds
+   and signs the DMG, and notarizes and staples that. If a Sparkle key is configured it also
+   regenerates `release/updates/appcast.xml`; otherwise that step is skipped and you still get a DMG.
 3. Publish with `PUBLISH=1 scripts/release.sh`, or run the `gh release create` command the script
    prints. Upload `appcast.xml` with every release: the app reads
    `releases/latest/download/appcast.xml`.

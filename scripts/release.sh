@@ -3,17 +3,15 @@
 # Builds, signs, notarizes and packages Unreasonable Timer as a DMG, and updates the Sparkle
 # appcast. Run on a Mac with Xcode, XcodeGen and a "Developer ID Application" certificate.
 #
-#   DEVELOPER_ID_APPLICATION="Developer ID Application: Unreasonable Group (ABCDE12345)" \
-#   TEAM_ID=ABCDE12345 \
 #   scripts/release.sh            # build everything into release/
 #   PUBLISH=1 scripts/release.sh  # ...and create the GitHub release (needs `gh`)
 #
-# One-time setup (certificate, notarytool profile, Sparkle keys) is in README.md.
+# The signing identity and team ID are read from your keychain when you have exactly one
+# Developer ID Application certificate; otherwise set DEVELOPER_ID_APPLICATION (and TEAM_ID).
+# One-time setup (notarytool profile, Sparkle keys) is in README.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-: "${DEVELOPER_ID_APPLICATION:?Set DEVELOPER_ID_APPLICATION to your signing identity name}"
-: "${TEAM_ID:?Set TEAM_ID to your 10-character Apple team ID}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-unreasonable-timer}"
 REPO="${REPO:-unreasonable/timer}"
 
@@ -21,6 +19,7 @@ APP_NAME="Unreasonable Timer"
 SCHEME="UnreasonableTimer"
 VERSION="$(awk '/MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
 BUILD_NUMBER="$(awk '/CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
+SPARKLE_KEY="$(awk '/SUPublicEDKey:/ { print $2; exit }' project.yml)"
 TAG="v${VERSION}"
 
 OUT="release"
@@ -31,12 +30,46 @@ DMG="$OUT/UnreasonableTimer-$VERSION.dmg"
 UPDATES="$OUT/updates"   # keep old DMGs here so the appcast keeps its history
 
 step() { printf '\n==> %s\n' "$1"; }
+fail() { printf '%s\n' "$1" >&2; exit 1; }
 
-for tool in xcodegen xcodebuild xcrun hdiutil codesign; do
-  command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
+for tool in xcodegen xcodebuild xcrun hdiutil codesign security; do
+  command -v "$tool" >/dev/null || fail "Missing required tool: $tool"
 done
 
+# --- Signing identity and team ----------------------------------------------------------
+if [ -z "${DEVELOPER_ID_APPLICATION:-}" ]; then
+  IDENTITIES="$(security find-identity -v -p codesigning | grep 'Developer ID Application' || true)"
+  COUNT="$(printf '%s' "$IDENTITIES" | grep -c . || true)"
+  if [ "$COUNT" -eq 0 ]; then
+    fail "No 'Developer ID Application' certificate found in your keychain.
+Create one in Xcode > Settings > Accounts > Manage Certificates."
+  elif [ "$COUNT" -gt 1 ]; then
+    fail "Several Developer ID identities found. Set DEVELOPER_ID_APPLICATION to one of:
+$IDENTITIES"
+  fi
+  DEVELOPER_ID_APPLICATION="$(printf '%s' "$IDENTITIES" | sed -E 's/^[^"]*"([^"]+)".*$/\1/')"
+fi
+if [ -z "${TEAM_ID:-}" ]; then
+  TEAM_ID="$(printf '%s' "$DEVELOPER_ID_APPLICATION" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')"
+  [ -n "$TEAM_ID" ] || fail "Could not read the team ID from '$DEVELOPER_ID_APPLICATION'. Set TEAM_ID."
+fi
+
 step "Releasing $APP_NAME $VERSION (build $BUILD_NUMBER)"
+echo "  Identity: $DEVELOPER_ID_APPLICATION"
+echo "  Team:     $TEAM_ID"
+
+# Fail now, not after a ten-minute build, if notarization isn't set up.
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 || fail "The notarytool profile '$NOTARY_PROFILE' doesn't work. Create it with:
+  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID"
+
+SPARKLE_READY=1
+case "$SPARKLE_KEY" in
+  REPLACE_* | "") SPARKLE_READY=0 ;;
+esac
+if [ "$SPARKLE_READY" -eq 0 ]; then
+  echo "  Sparkle:  no SUPublicEDKey in project.yml, so the update feed will be skipped."
+fi
+
 rm -rf "$ARCHIVE" "$EXPORT_DIR" "$OUT/dmg-staging" "$DMG"
 mkdir -p "$OUT" "$UPDATES"
 
@@ -75,7 +108,7 @@ xcodebuild -exportArchive \
   -quiet
 codesign --verify --deep --strict --verbose=2 "$APP"
 
-notarize() { # <file>: submit, wait, fail loudly if Apple rejects it
+notarize() { # <file>: submit, wait; notarytool exits non-zero if Apple rejects it
   xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait
 }
 
@@ -96,29 +129,32 @@ notarize "$DMG"
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
-step "6/6 Updating the Sparkle appcast"
-GENERATE_APPCAST="$(find "$OUT/DerivedData/SourcePackages" -type f -name generate_appcast -perm -u+x 2>/dev/null | head -n 1)"
-if [ -z "$GENERATE_APPCAST" ]; then
-  echo "Could not find Sparkle's generate_appcast in the build's package artifacts." >&2
-  exit 1
+ASSETS=("$DMG")
+if [ "$SPARKLE_READY" -eq 1 ]; then
+  step "6/6 Updating the Sparkle appcast"
+  GENERATE_APPCAST="$(find "$OUT/DerivedData/SourcePackages" -type f -name generate_appcast -perm -u+x 2>/dev/null | head -n 1)"
+  [ -n "$GENERATE_APPCAST" ] || fail "Could not find Sparkle's generate_appcast in the build's package artifacts."
+  cp "$DMG" "$UPDATES/"
+  # Signs each archive with the EdDSA key in your login Keychain (see README, one-time setup).
+  "$GENERATE_APPCAST" \
+    --download-url-prefix "https://github.com/$REPO/releases/download/$TAG/" \
+    "$UPDATES"
+  ASSETS+=("$UPDATES/appcast.xml")
+else
+  step "6/6 Skipping the Sparkle appcast (no SUPublicEDKey yet)"
 fi
-cp "$DMG" "$UPDATES/"
-# Signs each archive with the EdDSA key in your login Keychain (see README, one-time setup).
-"$GENERATE_APPCAST" \
-  --download-url-prefix "https://github.com/$REPO/releases/download/$TAG/" \
-  "$UPDATES"
 
 echo
 echo "Done."
-echo "  DMG:      $DMG"
-echo "  Appcast:  $UPDATES/appcast.xml"
+echo "  DMG: $DMG"
+[ "$SPARKLE_READY" -eq 1 ] && echo "  Appcast: $UPDATES/appcast.xml"
 
 if [ "${PUBLISH:-0}" = "1" ]; then
   step "Publishing $TAG to GitHub"
-  gh release create "$TAG" "$DMG" "$UPDATES/appcast.xml" \
-    --repo "$REPO" --title "$APP_NAME $VERSION" --generate-notes
+  gh release create "$TAG" "${ASSETS[@]}" \
+    --repo "$REPO" --target "$(git rev-parse HEAD)" \
+    --title "$APP_NAME $VERSION" --generate-notes
 else
   echo
-  echo "To publish:"
-  echo "  gh release create $TAG '$DMG' '$UPDATES/appcast.xml' --repo $REPO --title '$APP_NAME $VERSION' --generate-notes"
+  echo "To publish:  PUBLISH=1 scripts/release.sh   (or upload the DMG to a GitHub release yourself)"
 fi
