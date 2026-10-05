@@ -310,7 +310,13 @@ final class TimerController: ObservableObject {
         keepAwake.setHeld(running && UserDefaults.standard.bool(forKey: AppSettings.keepAwake))
 
         dockTile.update(title.map { text in
-            DockTile.State(text: text, progress: snapshot.progress, expired: snapshot.isExpired, overtime: snapshot.isOvertime)
+            DockTile.State(
+                text: text,
+                progress: snapshot.progress,
+                expired: snapshot.isExpired,
+                overtime: snapshot.isOvertime,
+                accent: AccentColor.current
+            )
         })
     }
 }

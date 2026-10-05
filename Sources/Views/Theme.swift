@@ -11,6 +11,13 @@ struct RGBA: Hashable {
     var b: Double
     var a: Double
 
+    init(r: Double, g: Double, b: Double, a: Double = 1) {
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+    }
+
     init(_ hex: UInt32, alpha: Double = 1) {
         r = Double((hex >> 16) & 0xFF) / 255
         g = Double((hex >> 8) & 0xFF) / 255
@@ -32,9 +39,123 @@ struct RGBA: Hashable {
             opacity: a + (other.a - a) * t
         )
     }
+
+    var hex: UInt32 {
+        func byte(_ v: Double) -> UInt32 { UInt32((min(max(v, 0), 1) * 255).rounded()) }
+        return byte(r) << 16 | byte(g) << 8 | byte(b)
+    }
+
+    // MARK: HSL
+
+    /// Hue 0..<1, saturation and lightness 0...1.
+    var hsl: (h: Double, s: Double, l: Double) {
+        let maxV = max(r, g, b), minV = min(r, g, b)
+        let l = (maxV + minV) / 2
+        guard maxV != minV else { return (0, 0, l) }
+        let d = maxV - minV
+        let s = l > 0.5 ? d / (2 - maxV - minV) : d / (maxV + minV)
+        var h: Double
+        if maxV == r {
+            h = (g - b) / d + (g < b ? 6 : 0)
+        } else if maxV == g {
+            h = (b - r) / d + 2
+        } else {
+            h = (r - g) / d + 4
+        }
+        h /= 6
+        return (h, s, l)
+    }
+
+    init(h: Double, s: Double, l: Double, a: Double = 1) {
+        guard s > 0 else {
+            self.init(r: l, g: l, b: l, a: a)
+            return
+        }
+        func channel(_ p: Double, _ q: Double, _ t: Double) -> Double {
+            var t = t
+            if t < 0 { t += 1 }
+            if t > 1 { t -= 1 }
+            if t < 1.0 / 6 { return p + (q - p) * 6 * t }
+            if t < 1.0 / 2 { return q }
+            if t < 2.0 / 3 { return p + (q - p) * (2.0 / 3 - t) * 6 }
+            return p
+        }
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        let p = 2 * l - q
+        self.init(r: channel(p, q, h + 1.0 / 3), g: channel(p, q, h), b: channel(p, q, h - 1.0 / 3), a: a)
+    }
 }
 
-/// The CSS custom properties from the web timer (`.timer` / `.timer[data-theme="light"]`).
+/// The colour the whole interface is drawn in.
+///
+/// The web timer's teal is one hue at one saturation, used at several lightnesses (#d3f1f3,
+/// #b9e6ea, #54bfc8, #41b8c2, #2A7C83, #1D5559, #0b2426). Any accent gets the same family:
+/// each shade keeps the accent's hue and saturation and takes the teal shade's lightness, so
+/// contrast against the dark and light backgrounds stays what the web design intends. Teal
+/// itself maps back to the exact web values.
+struct AccentColor: Hashable {
+    let hex: UInt32
+
+    static let teal = AccentColor(hex: 0x41B8C2)
+
+    struct Preset: Identifiable {
+        let name: String
+        let accent: AccentColor
+        var id: UInt32 { accent.hex }
+    }
+
+    static let presets: [Preset] = [
+        Preset(name: "Teal", accent: .teal),
+        Preset(name: "Blue", accent: AccentColor(hex: 0x3B8FD9)),
+        Preset(name: "Indigo", accent: AccentColor(hex: 0x5C6BD6)),
+        Preset(name: "Violet", accent: AccentColor(hex: 0x8E5CD6)),
+        Preset(name: "Pink", accent: AccentColor(hex: 0xD65C9C)),
+        Preset(name: "Red", accent: AccentColor(hex: 0xD9534F)),
+        Preset(name: "Orange", accent: AccentColor(hex: 0xE8743B)),
+        Preset(name: "Amber", accent: AccentColor(hex: 0xE0A83A)),
+        Preset(name: "Green", accent: AccentColor(hex: 0x4CB87A)),
+        Preset(name: "Graphite", accent: AccentColor(hex: 0x8A9295)),
+    ]
+
+    init(hex: UInt32) {
+        self.hex = hex & 0xFFFFFF
+    }
+
+    /// "#RRGGBB" (the stored form).
+    init?(string: String) {
+        let digits = string.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "#", with: "")
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+        self.init(hex: value)
+    }
+
+    init(_ color: Color) {
+        let ns = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(srgbRed: 0.255, green: 0.722, blue: 0.761, alpha: 1)
+        self.init(hex: RGBA(r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent).hex)
+    }
+
+    var string: String { String(format: "#%06X", hex) }
+
+    /// The accent as it appears on screen (the dark theme's main shade).
+    var color: Color { shade(0x41B8C2).color }
+
+    /// The current setting, for code outside SwiftUI views.
+    static var current: AccentColor {
+        AccentColor(string: UserDefaults.standard.string(forKey: AppSettings.accentColor) ?? "") ?? .teal
+    }
+
+    /// The web teal shade `tealHex`, translated into this accent.
+    func shade(_ tealHex: UInt32, alpha: Double = 1) -> RGBA {
+        if self == .teal { return RGBA(tealHex, alpha: alpha) }
+        let base = RGBA(AccentColor.teal.hex).hsl
+        let mine = RGBA(hex).hsl
+        let target = RGBA(tealHex).hsl
+        let saturation = base.s > 0 ? min(1, mine.s * target.s / base.s) : mine.s
+        return RGBA(h: mine.h, s: saturation, l: target.l, a: alpha)
+    }
+}
+
+/// The CSS custom properties from the web timer (`.timer` / `.timer[data-theme="light"]`),
+/// with every teal value taken from the chosen accent.
 struct Palette {
     let isLight: Bool
 
@@ -43,23 +164,24 @@ struct Palette {
     let textSoft: Color
     let textMuted: Color
     let textFaint: Color
-    let teal: Color
-    let tealBright: Color
-    let tealSoft: Color
+    let accent: Color
+    let accentBright: Color
+    let accentSoft: Color
     let hairline: Color
-    let onTeal: Color
+    let onAccent: Color
     let glowTop: Color
     let glowBottom: Color
     let control: Color
     let grain: Double
 
     /// Base colours kept as components so they can be blended for animations.
-    let tealBase: RGBA
+    let accentBase: RGBA
     let textBase: RGBA
-    let tealBrightBase: RGBA
+    let accentBrightBase: RGBA
 
-    let tealTextStops: [Gradient.Stop]
-    let tealFillStops: [Gradient.Stop]
+    let accentTextStops: [Gradient.Stop]
+    let accentFillStops: [Gradient.Stop]
+    let progressStops: [Gradient.Stop]
     let surfaceTop: Color
     let surfaceBottom: Color
     let surfaceShadow: Color
@@ -67,13 +189,18 @@ struct Palette {
     let flashOuter: Color
 
     /// `--teal-text`: top-to-bottom gradient used on big text.
-    var tealText: LinearGradient {
-        LinearGradient(stops: tealTextStops, startPoint: .top, endPoint: .bottom)
+    var accentText: LinearGradient {
+        LinearGradient(stops: accentTextStops, startPoint: .top, endPoint: .bottom)
     }
 
     /// `--teal-fill`: 135° gradient used on buttons and selected controls.
-    var tealFill: LinearGradient {
-        LinearGradient(stops: tealFillStops, startPoint: .topLeading, endPoint: .bottomTrailing)
+    var accentFill: LinearGradient {
+        LinearGradient(stops: accentFillStops, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// The countdown's progress bar fill.
+    var progressGradient: LinearGradient {
+        LinearGradient(stops: progressStops, startPoint: .leading, endPoint: .trailing)
     }
 
     /// `--surface`: the form card.
@@ -82,104 +209,115 @@ struct Palette {
     }
 
     /// `rgba(var(--teal-rgb), x)`
-    func teal(_ opacity: Double) -> Color { tealBase.color(opacity: opacity) }
+    func accent(_ opacity: Double) -> Color { accentBase.color(opacity: opacity) }
 
-    /// Colour of the running digits: they flash between white and teal from 15 seconds, then
-    /// from 10 seconds each tick pops in bright teal and settles back to white.
+    /// Colour of the running digits: they flash between white and the accent from 15 seconds,
+    /// then from 10 seconds each tick pops in the bright accent and settles back to white.
     func digitColor(isFinal: Bool, flash: Double, tick: Double) -> Color {
         isFinal
-            ? textBase.mixed(with: tealBrightBase, by: tick)
-            : textBase.mixed(with: tealBase, by: flash)
+            ? textBase.mixed(with: accentBrightBase, by: tick)
+            : textBase.mixed(with: accentBase, by: flash)
     }
 
-    static func forMode(_ mode: TimerThemeMode) -> Palette {
-        mode == .light ? light : dark
+    @MainActor private static var cache: [String: Palette] = [:]
+
+    /// The palette for a theme and accent. Views ask for it many times a second, so it is cached.
+    @MainActor
+    static func make(_ mode: TimerThemeMode, accent: AccentColor = .teal) -> Palette {
+        let key = "\(mode.rawValue)-\(accent.hex)"
+        if let cached = cache[key] { return cached }
+        let palette = mode == .light ? light(accent) : dark(accent)
+        cache[key] = palette
+        return palette
     }
 
-    static let dark = Palette(
-        isLight: false,
-        background: RGBA(0x050505).color,
-        text: RGBA(0xf4fbfb).color,
-        textSoft: RGBA(0xf4fbfb, alpha: 0.85).color,
-        textMuted: RGBA(0xf4fbfb, alpha: 0.5).color,
-        textFaint: RGBA(0xf4fbfb, alpha: 0.28).color,
-        teal: RGBA(0x41b8c2).color,
-        tealBright: RGBA(0x54bfc8).color,
-        tealSoft: RGBA(0x41b8c2, alpha: 0.75).color,
-        hairline: RGBA(0x41b8c2, alpha: 0.22).color,
-        onTeal: RGBA(0x0b2426).color,
-        glowTop: RGBA(0x41b8c2, alpha: 0.12).color,
-        glowBottom: RGBA(0x1d5559, alpha: 0.2).color,
-        control: Color.white.opacity(0.06),
-        grain: 0.05,
-        tealBase: RGBA(0x41b8c2),
-        textBase: RGBA(0xf4fbfb),
-        tealBrightBase: RGBA(0x54bfc8),
-        tealTextStops: [
-            .init(color: RGBA(0xd3f1f3).color, location: 0),
-            .init(color: RGBA(0x54bfc8).color, location: 0.55),
-            .init(color: RGBA(0x2a7c83).color, location: 1),
-        ],
-        tealFillStops: [
-            .init(color: RGBA(0xb9e6ea).color, location: 0),
-            .init(color: RGBA(0x54bfc8).color, location: 0.4),
-            .init(color: RGBA(0x41b8c2).color, location: 0.7),
-            .init(color: RGBA(0x2a7c83).color, location: 1),
-        ],
-        surfaceTop: Color.white.opacity(0.04),
-        surfaceBottom: Color.white.opacity(0.012),
-        surfaceShadow: Color.black.opacity(0.7),
-        flashInner: RGBA(0x54bfc8, alpha: 0.9).color,
-        flashOuter: RGBA(0x2a7c83, alpha: 0.6).color
-    )
+    private static func progress(_ a: AccentColor) -> [Gradient.Stop] {
+        [
+            .init(color: a.shade(0x1d5559).color, location: 0),
+            .init(color: a.shade(0x2a7c83).color, location: 0.3),
+            .init(color: a.shade(0x41b8c2).color, location: 0.7),
+            .init(color: a.shade(0x54bfc8).color, location: 1),
+        ]
+    }
 
-    static let light = Palette(
-        isLight: true,
-        background: Color.white,
-        text: Color.black,
-        textSoft: Color.black.opacity(0.8),
-        textMuted: Color.black.opacity(0.55),
-        textFaint: Color.black.opacity(0.3),
-        teal: RGBA(0x2a7c83).color,
-        tealBright: RGBA(0x41b8c2).color,
-        tealSoft: RGBA(0x2a7c83, alpha: 0.85).color,
-        hairline: RGBA(0x2a7c83, alpha: 0.25).color,
-        onTeal: Color.white,
-        glowTop: RGBA(0x41b8c2, alpha: 0.14).color,
-        glowBottom: RGBA(0x54bfc8, alpha: 0.12).color,
-        control: Color.black.opacity(0.05),
-        grain: 0.03,
-        tealBase: RGBA(0x2a7c83),
-        textBase: RGBA(0x000000),
-        tealBrightBase: RGBA(0x41b8c2),
-        tealTextStops: [
-            .init(color: RGBA(0x41b8c2).color, location: 0),
-            .init(color: RGBA(0x2a7c83).color, location: 0.55),
-            .init(color: RGBA(0x1d5559).color, location: 1),
-        ],
-        tealFillStops: [
-            .init(color: RGBA(0x41b8c2).color, location: 0),
-            .init(color: RGBA(0x2a7c83).color, location: 0.55),
-            .init(color: RGBA(0x1d5559).color, location: 1),
-        ],
-        surfaceTop: Color.white.opacity(0.85),
-        surfaceBottom: Color.white.opacity(0.85),
-        surfaceShadow: RGBA(0x1d5559, alpha: 0.35).color,
-        flashInner: RGBA(0x54bfc8, alpha: 0.5).color,
-        flashOuter: RGBA(0x41b8c2, alpha: 0.3).color
-    )
+    private static func dark(_ a: AccentColor) -> Palette {
+        Palette(
+            isLight: false,
+            background: RGBA(0x050505).color,
+            text: RGBA(0xf4fbfb).color,
+            textSoft: RGBA(0xf4fbfb, alpha: 0.85).color,
+            textMuted: RGBA(0xf4fbfb, alpha: 0.5).color,
+            textFaint: RGBA(0xf4fbfb, alpha: 0.28).color,
+            accent: a.shade(0x41b8c2).color,
+            accentBright: a.shade(0x54bfc8).color,
+            accentSoft: a.shade(0x41b8c2, alpha: 0.75).color,
+            hairline: a.shade(0x41b8c2, alpha: 0.22).color,
+            onAccent: a.shade(0x0b2426).color,
+            glowTop: a.shade(0x41b8c2, alpha: 0.12).color,
+            glowBottom: a.shade(0x1d5559, alpha: 0.2).color,
+            control: Color.white.opacity(0.06),
+            grain: 0.05,
+            accentBase: a.shade(0x41b8c2),
+            textBase: RGBA(0xf4fbfb),
+            accentBrightBase: a.shade(0x54bfc8),
+            accentTextStops: [
+                .init(color: a.shade(0xd3f1f3).color, location: 0),
+                .init(color: a.shade(0x54bfc8).color, location: 0.55),
+                .init(color: a.shade(0x2a7c83).color, location: 1),
+            ],
+            accentFillStops: [
+                .init(color: a.shade(0xb9e6ea).color, location: 0),
+                .init(color: a.shade(0x54bfc8).color, location: 0.4),
+                .init(color: a.shade(0x41b8c2).color, location: 0.7),
+                .init(color: a.shade(0x2a7c83).color, location: 1),
+            ],
+            progressStops: progress(a),
+            surfaceTop: Color.white.opacity(0.04),
+            surfaceBottom: Color.white.opacity(0.012),
+            surfaceShadow: Color.black.opacity(0.7),
+            flashInner: a.shade(0x54bfc8, alpha: 0.9).color,
+            flashOuter: a.shade(0x2a7c83, alpha: 0.6).color
+        )
+    }
 
-    /// The progress bar fill, the same in both themes.
-    static let progressGradient = LinearGradient(
-        stops: [
-            .init(color: RGBA(0x1d5559).color, location: 0),
-            .init(color: RGBA(0x2a7c83).color, location: 0.3),
-            .init(color: RGBA(0x41b8c2).color, location: 0.7),
-            .init(color: RGBA(0x54bfc8).color, location: 1),
-        ],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
+    private static func light(_ a: AccentColor) -> Palette {
+        Palette(
+            isLight: true,
+            background: Color.white,
+            text: Color.black,
+            textSoft: Color.black.opacity(0.8),
+            textMuted: Color.black.opacity(0.55),
+            textFaint: Color.black.opacity(0.3),
+            accent: a.shade(0x2a7c83).color,
+            accentBright: a.shade(0x41b8c2).color,
+            accentSoft: a.shade(0x2a7c83, alpha: 0.85).color,
+            hairline: a.shade(0x2a7c83, alpha: 0.25).color,
+            onAccent: Color.white,
+            glowTop: a.shade(0x41b8c2, alpha: 0.14).color,
+            glowBottom: a.shade(0x54bfc8, alpha: 0.12).color,
+            control: Color.black.opacity(0.05),
+            grain: 0.03,
+            accentBase: a.shade(0x2a7c83),
+            textBase: RGBA(0x000000),
+            accentBrightBase: a.shade(0x41b8c2),
+            accentTextStops: [
+                .init(color: a.shade(0x41b8c2).color, location: 0),
+                .init(color: a.shade(0x2a7c83).color, location: 0.55),
+                .init(color: a.shade(0x1d5559).color, location: 1),
+            ],
+            accentFillStops: [
+                .init(color: a.shade(0x41b8c2).color, location: 0),
+                .init(color: a.shade(0x2a7c83).color, location: 0.55),
+                .init(color: a.shade(0x1d5559).color, location: 1),
+            ],
+            progressStops: progress(a),
+            surfaceTop: Color.white.opacity(0.85),
+            surfaceBottom: Color.white.opacity(0.85),
+            surfaceShadow: a.shade(0x1d5559, alpha: 0.35).color,
+            flashInner: a.shade(0x54bfc8, alpha: 0.5).color,
+            flashOuter: a.shade(0x41b8c2, alpha: 0.3).color
+        )
+    }
 }
 
 // MARK: - Fonts

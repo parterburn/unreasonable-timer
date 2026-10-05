@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.chimeAtWarning) private var chimeAtWarning = false
     @AppStorage(AppSettings.chimeAtZero) private var chimeAtZero = true
     @AppStorage(AppSettings.presentDisplay) private var presentDisplay = 0
+    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
 
     /// Toggled to make the "Open at login" row re-read `SMAppService`'s status.
     @State private var loginRefresh = false
@@ -26,12 +27,20 @@ struct SettingsView: View {
         }
         .frame(width: 500)
         .scenePadding()
+        .tint((AccentColor(string: accentHex) ?? .teal).color)
     }
 
     // MARK: General
 
     private var general: some View {
         Form {
+            Section("Appearance") {
+                LabeledContent("Accent color") {
+                    AccentPicker(hex: $accentHex, swatchSize: 15)
+                }
+                .onChange(of: accentHex) { controller.settingsChanged() }
+            }
+
             Section("Timer") {
                 Toggle("Keep the display awake while a timer runs", isOn: $keepAwake)
                     .onChange(of: keepAwake) { controller.settingsChanged() }

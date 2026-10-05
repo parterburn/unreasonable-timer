@@ -55,6 +55,7 @@ struct SetupView: View {
     @State private var saveName = ""
     @FocusState private var focus: SetupField?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
 
     init(controller: TimerController, store: PresetStore) {
         self.controller = controller
@@ -62,7 +63,7 @@ struct SetupView: View {
         _draft = State(initialValue: Draft(config: controller.formPrefill ?? controller.config))
     }
 
-    private var palette: Palette { Palette.forMode(draft.theme) }
+    private var palette: Palette { Palette.make(draft.theme, accent: AccentColor(string: accentHex) ?? .teal) }
 
     var body: some View {
         GeometryReader { geo in
@@ -79,11 +80,12 @@ struct SetupView: View {
                     }
                     .scrollIndicators(.never)
                     .onAppear {
-                        // For scripted screenshots of the lower half (scripts/ci-screenshots.sh).
-                        if UserDefaults.standard.string(forKey: "UTSetupScroll") == "bottom" {
+                        // For scripted screenshots further down the form (scripts/ci-screenshots.sh).
+                        if let target = UserDefaults.standard.string(forKey: "UTSetupScroll"),
+                           target == "bottom" || target == "controls" {
                             Task { @MainActor in
                                 try? await Task.sleep(nanoseconds: 500_000_000)
-                                proxy.scrollTo("bottom", anchor: .bottom)
+                                proxy.scrollTo(target, anchor: target == "bottom" ? .bottom : .center)
                             }
                         }
                     }
@@ -97,7 +99,14 @@ struct SetupView: View {
         .onAppear {
             appeared = true
             consumePrefill()
+            // AppKit gives the first text field focus on its own, which selects the minutes in
+            // a blue highlight; the web form starts with nothing focused.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                controller.mainWindow?.makeFirstResponder(nil)
+            }
         }
+        .onChange(of: accentHex) { controller.settingsChanged() }
         .onChange(of: controller.formPrefill) { _, _ in consumePrefill() }
         .onChange(of: focus) { old, _ in
             if old == .minutes || old == .seconds { normalizeTime() }
@@ -145,13 +154,14 @@ struct SetupView: View {
             Toggle("Keep counting after time is up", isOn: $draft.countOver)
                 .toggleStyle(PillToggleStyle(palette: palette))
                 .rise(6, appeared)
-            themePicker.rise(7, appeared)
+            themePicker.id("controls").rise(7, appeared)
+            accentRow.rise(8, appeared)
             VStack(spacing: 14) {
                 startButton
                 saveButton
             }
-            .rise(8, appeared)
-            lists.rise(9, appeared)
+            .rise(9, appeared)
+            lists.rise(10, appeared)
         }
         .padding(.horizontal, 32)
         .padding(.top, 16)
@@ -168,12 +178,12 @@ struct SetupView: View {
     private var header: some View {
         VStack(spacing: 22) {
             // The web title clips the teal text gradient to the emoji, which turns the hourglass
-            // into a teal silhouette; masking the gradient with the emoji does the same.
-            palette.tealText
+            // into an accent-coloured silhouette; masking the gradient with the emoji does the same.
+            palette.accentText
                 .frame(width: 40, height: 44)
                 .mask { Text("⏳").font(.system(size: 32)) }
             Rectangle()
-                .fill(LinearGradient(colors: [palette.teal(0), palette.teal, palette.teal(0)], startPoint: .leading, endPoint: .trailing))
+                .fill(LinearGradient(colors: [palette.accent(0), palette.accent, palette.accent(0)], startPoint: .leading, endPoint: .trailing))
                 .frame(width: 64, height: 1)
         }
         .padding(.top, 24)
@@ -186,7 +196,7 @@ struct SetupView: View {
             timeColumn("Minutes", text: $draft.minutes, field: .minutes, maxDigits: 4)
             Text(":")
                 .font(.inter(72, .light))
-                .foregroundStyle(palette.tealSoft)
+                .foregroundStyle(palette.accentSoft)
                 .padding(.horizontal, 4)
                 .padding(.top, 2)
             timeColumn("Seconds", text: $draft.seconds, field: .seconds, maxDigits: 2)
@@ -202,7 +212,7 @@ struct SetupView: View {
                 .monospacedDigit()
                 .tracking(-2.6)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(focus == field ? palette.teal : palette.text)
+                .foregroundStyle(focus == field ? palette.accent : palette.text)
                 .focused($focus, equals: field)
                 .onChange(of: text.wrappedValue) { _, new in
                     let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(maxDigits))
@@ -226,14 +236,14 @@ struct SetupView: View {
         Text(text.uppercased())
             .font(.inter(10.56, .semibold))
             .tracking(2.96)
-            .foregroundStyle(palette.tealSoft)
+            .foregroundStyle(palette.accentSoft)
     }
 
     private func underline(focused: Bool) -> some View {
         Rectangle()
-            .fill(focused ? palette.teal : palette.hairline)
+            .fill(focused ? palette.accent : palette.hairline)
             .frame(height: 1)
-            .shadow(color: focused ? palette.teal : .clear, radius: 0, y: 1)
+            .shadow(color: focused ? palette.accent : .clear, radius: 0, y: 1)
     }
 
     private func textField(
@@ -318,6 +328,15 @@ struct SetupView: View {
         }
     }
 
+    /// Not part of the timer link: the accent is an app-wide setting (also in Settings).
+    private var accentRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Accent")
+            AccentPicker(hex: $accentHex, ring: palette.text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func themeSegment(_ title: String, mode: TimerThemeMode) -> some View {
         let selected = draft.theme == mode
         return Button {
@@ -325,10 +344,10 @@ struct SetupView: View {
         } label: {
             Text(title)
                 .font(.inter(14.4, .medium))
-                .foregroundStyle(selected ? palette.onTeal : palette.textSoft)
+                .foregroundStyle(selected ? palette.onAccent : palette.textSoft)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9.6)
-                .background(Capsule().fill(selected ? AnyShapeStyle(palette.tealFill) : AnyShapeStyle(Color.clear)))
+                .background(Capsule().fill(selected ? AnyShapeStyle(palette.accentFill) : AnyShapeStyle(Color.clear)))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -341,12 +360,12 @@ struct SetupView: View {
             Text("START TIMER")
                 .font(.inter(12.8, .bold))
                 .tracking(4.86)
-                .foregroundStyle(palette.onTeal)
+                .foregroundStyle(palette.onAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
-                .background(Capsule().fill(palette.tealFill))
+                .background(Capsule().fill(palette.accentFill))
                 .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
-                .shadow(color: palette.teal(0.45), radius: 20, y: 12)
+                .shadow(color: palette.accent(0.45), radius: 20, y: 12)
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -362,7 +381,7 @@ struct SetupView: View {
         } label: {
             Text("Save as named timer…")
                 .font(.inter(13.6, .medium))
-                .foregroundStyle(palette.tealSoft)
+                .foregroundStyle(palette.accentSoft)
         }
         .buttonStyle(.plain)
         .disabled(draft.makeConfig() == nil)
@@ -440,7 +459,7 @@ struct SetupView: View {
     }
 
     private var rowDivider: some View {
-        Rectangle().fill(palette.teal(0.12)).frame(height: 1)
+        Rectangle().fill(palette.accent(0.12)).frame(height: 1)
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -459,7 +478,7 @@ struct SetupView: View {
 
 // MARK: - Pieces
 
-/// A row in "Saved timers" / "Previous timers": big duration, small description, teal on hover.
+/// A row in "Saved timers" / "Previous timers": big duration, small description, accent on hover.
 private struct TimerRow: View {
     let palette: Palette
     let title: String
@@ -475,7 +494,7 @@ private struct TimerRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.inter(20, .semibold))
-                        .foregroundStyle(hovering ? palette.teal : palette.text)
+                        .foregroundStyle(hovering ? palette.accent : palette.text)
                     Text(subtitle)
                         .font(.inter(12.8))
                         .foregroundStyle(palette.textMuted)
@@ -515,11 +534,11 @@ private struct PillToggleStyle: ToggleStyle {
                 Spacer()
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                     Capsule()
-                        .fill(configuration.isOn ? AnyShapeStyle(palette.tealFill) : AnyShapeStyle(palette.control))
+                        .fill(configuration.isOn ? AnyShapeStyle(palette.accentFill) : AnyShapeStyle(palette.control))
                     Capsule()
                         .stroke(configuration.isOn ? Color.clear : palette.hairline, lineWidth: 1)
                     Circle()
-                        .fill(configuration.isOn ? palette.onTeal : palette.textMuted)
+                        .fill(configuration.isOn ? palette.onAccent : palette.textMuted)
                         .frame(width: 18, height: 18)
                         .padding(3)
                 }

@@ -11,12 +11,14 @@ final class DockTile {
         var progress: Double
         var expired: Bool
         var overtime: Bool
+        var accent: AccentColor
 
-        init(text: String, progress: Double, expired: Bool, overtime: Bool) {
+        init(text: String, progress: Double, expired: Bool, overtime: Bool, accent: AccentColor) {
             self.text = text
             self.progress = (progress * 100).rounded() / 100
             self.expired = expired
             self.overtime = overtime
+            self.accent = accent
         }
     }
 
@@ -50,6 +52,7 @@ private struct DockTileView: View {
             let side = min(geo.size.width, geo.size.height)
             let dial = side * 0.66
             let ring = side * 0.055
+            let bright = state.accent.shade(0x54bfc8).color
 
             ZStack {
                 Image(nsImage: NSApp.applicationIconImage)
@@ -57,19 +60,16 @@ private struct DockTileView: View {
                     .scaledToFit()
 
                 ZStack {
-                    Circle().fill(Color(red: 0.043, green: 0.141, blue: 0.149).opacity(0.9))
+                    Circle().fill(state.accent.shade(0x0b2426, alpha: 0.9).color)
                     Circle().stroke(Color.white.opacity(0.18), lineWidth: ring)
                     Circle()
                         .trim(from: 0, to: state.expired ? 1 : state.progress)
-                        .stroke(
-                            Color(red: 0.33, green: 0.75, blue: 0.78),
-                            style: StrokeStyle(lineWidth: ring, lineCap: .round)
-                        )
+                        .stroke(bright, style: StrokeStyle(lineWidth: ring, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     Text(state.text)
                         .font(.system(size: dial * (state.overtime ? 0.25 : 0.3), weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(state.expired && !state.overtime ? Color(red: 0.33, green: 0.75, blue: 0.78) : .white)
+                        .foregroundStyle(state.expired && !state.overtime ? bright : .white)
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
                         .padding(.horizontal, ring * 1.6)

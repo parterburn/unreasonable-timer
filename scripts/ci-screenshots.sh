@@ -40,9 +40,17 @@ capture() { # <name>
   echo "captured $1"
 }
 
-open "$APP" --args -UTWindowFrame "{{60,60},{1280,800}}"
-for _ in $(seq 1 30); do pgrep -f "$NAME.app/Contents/MacOS" >/dev/null && break; sleep 1; done
-sleep 6
+launch() { # [extra launch arguments...]
+  if pgrep -f "$NAME.app/Contents/MacOS" >/dev/null; then
+    osascript -e "tell application \"$NAME\" to quit" || true
+    sleep 3
+  fi
+  open "$APP" --args -UTWindowFrame "{{60,60},{1280,800}}" "$@"
+  for _ in $(seq 1 30); do pgrep -f "$NAME.app/Contents/MacOS" >/dev/null && break; sleep 1; done
+  sleep 6
+}
+
+launch
 capture setup-dark
 
 open "untimer://open?time=20&lead=$LEAD&people=12"
@@ -64,16 +72,35 @@ sleep 3;  capture countdown-7-light
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light
 
-# The lower half of the form (toggle, theme, Start, history): relaunch scrolled to the bottom.
-osascript -e "tell application \"$NAME\" to quit" || true
-sleep 3
-open "$APP" --args -UTWindowFrame "{{60,60},{1280,800}}" -UTSetupScroll bottom
-for _ in $(seq 1 30); do pgrep -f "$NAME.app/Contents/MacOS" >/dev/null && break; sleep 1; done
-sleep 5
+# Further down the form: relaunch scrolled to the controls (toggle, theme, accent, Start)
+# and to the bottom (history).
+launch -UTSetupScroll controls
+capture setup-dark-controls
+open "untimer://edit?time=600&theme=light"
+sleep 3;  capture setup-light-controls
+
+launch -UTSetupScroll bottom
 open "untimer://edit?time=600"
 sleep 3;  capture setup-dark-bottom
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light-bottom
+
+# Another accent (orange), set through the argument domain the way a saved choice would be.
+launch -UTSetupScroll controls -accentColor "#E8743B"
+capture accent-setup-dark
+open "untimer://start?time=20&lead=$LEAD&people=12"
+sleep 3;  capture accent-countdown-running
+sleep 11; capture accent-countdown-final     # ~5 left
+sleep 15; capture accent-countdown-overtime  # ~+11
+open "untimer://edit?time=600&theme=light"
+sleep 3;  capture accent-setup-light
+
+# Settings, in front of the main window. The whole screen, since the main window is larger.
+launch -UTOpenSettings YES
+screencapture -x "$OUT/settings.png"
+sips -s format jpeg -s formatOptions 82 "$OUT/settings.png" --out "$OUT/settings.jpg" >/dev/null
+rm "$OUT/settings.png"
+echo "captured settings"
 
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"

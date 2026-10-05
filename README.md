@@ -56,7 +56,8 @@ means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` sele
 
 ### Settings
 
-Keep the display awake while running (on by default), keep the timer above other windows,
+Accent color (teal by default; also on the setup form), keep the display awake while running
+(on by default), keep the timer above other windows,
 which display to go fullscreen on, chimes at 15 seconds and at zero, menu bar item, open at
 login, and updates.
 

@@ -13,10 +13,11 @@ struct CountdownView: View {
     @State private var hoveringHint = false
     @State private var isIdle = false
     @State private var idleTask: Task<Void, Never>?
+    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
 
     private var snap: TimerEngine.Snapshot { clock.snapshot }
     private var config: TimerConfig { controller.config }
-    private var palette: Palette { Palette.forMode(config.theme) }
+    private var palette: Palette { Palette.make(config.theme, accent: AccentColor(string: accentHex) ?? .teal) }
     /// The lead text gives way to the warning text from 15 seconds on, and stays gone.
     private var showsWarning: Bool { snap.isWarning || snap.isExpired }
     private var hintVisible: Bool { (hoveringStage || hoveringHint) && !isIdle }
@@ -109,16 +110,16 @@ struct CountdownView: View {
 
     // MARK: Atmosphere
 
-    /// Teal glow from the screen edges; the centre stays clear so the digits keep their contrast
+    /// Accent glow from the screen edges; the centre stays clear so the digits keep their contrast
     /// on a projector. Builds with `heat`, and breathes once the timer has expired.
     private var heatLayer: some View {
         Wave(period: 3, active: snap.isExpired) { phase in
             EllipticalGradient(
                 stops: [
-                    .init(color: palette.teal(0), location: 0),
-                    .init(color: palette.teal(0), location: 0.4),
-                    .init(color: palette.teal(0.18), location: 0.7),
-                    .init(color: palette.teal(0.5), location: 1),
+                    .init(color: palette.accent(0), location: 0),
+                    .init(color: palette.accent(0), location: 0.4),
+                    .init(color: palette.accent(0.18), location: 0.7),
+                    .init(color: palette.accent(0.5), location: 1),
                 ],
                 center: .center,
                 startRadiusFraction: 0,
@@ -130,7 +131,7 @@ struct CountdownView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 1), value: snap.heat)
     }
 
-    /// A brief wash of teal at zero.
+    /// A brief wash of the accent at zero.
     private var flashLayer: some View {
         // Plain values, not `self`, because the animator's closure isn't main-actor isolated.
         let reduce = reduceMotion
@@ -155,10 +156,10 @@ struct CountdownView: View {
         VStack(spacing: 0) {
             Spacer()
             ZStack(alignment: .leading) {
-                Rectangle().fill(palette.teal(0.08))
+                Rectangle().fill(palette.accent(0.08))
                 Rectangle()
-                    .fill(Palette.progressGradient)
-                    .shadow(color: palette.teal(0.35), radius: 18)
+                    .fill(palette.progressGradient)
+                    .shadow(color: palette.accent(0.35), radius: 18)
                     .brightness(snap.isWarning ? 0.08 : 0)
                     .saturation(snap.isWarning ? 1.2 : 1)
                     .scaleEffect(x: max(snap.progress, 0.0001), y: 1, anchor: .leading)
@@ -199,7 +200,7 @@ struct CountdownView: View {
             if let cost = snap.costText {
                 Text(cost)
                     .font(.inter(costSize))
-                    .foregroundStyle(palette.tealSoft)
+                    .foregroundStyle(palette.accentSoft)
                     .multilineTextAlignment(.center)
                     .padding(.top, 16)
             }
@@ -220,8 +221,8 @@ struct CountdownView: View {
             Text(config.doneText.uppercased())
                 .font(.inter(size, .semibold))
                 .tracking(size * 0.08)
-                .foregroundStyle(palette.tealText)
-                .shadow(color: palette.teal(0.45), radius: 8 + snap.heat * 40)
+                .foregroundStyle(palette.accentText)
+                .shadow(color: palette.accent(0.45), radius: 8 + snap.heat * 40)
                 .scaleEffect(1 + 0.04 * pulse)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -243,7 +244,7 @@ struct CountdownView: View {
                     .lineLimit(isDoneText ? 4 : 1)
                     .minimumScaleFactor(isDoneText ? 0.5 : 0.4)
                     .frame(maxWidth: maxWidth)
-                    // Each second of the last ten: a small pop from bright teal back to white.
+                    // Each second of the last ten: a small pop from the bright accent back to white.
                     .keyframeAnimator(initialValue: 0.0, trigger: clock.tickToken) { content, tick in
                         let t = (isFinal && !reduce) ? tick : 0
                         content
@@ -277,8 +278,8 @@ struct CountdownView: View {
             base.foregroundStyle(palette.textMuted)
         } else if snap.isExpired {
             base
-                .foregroundStyle(palette.tealText)
-                .shadow(color: palette.teal(0.45), radius: 8 + snap.heat * 40)
+                .foregroundStyle(palette.accentText)
+                .shadow(color: palette.accent(0.45), radius: 8 + snap.heat * 40)
                 .scaleEffect(1 + 0.04 * pulse)
         } else {
             base
@@ -328,7 +329,7 @@ struct CountdownView: View {
             .disabled(!hintVisible)
         }
         .font(.inter(13.6))
-        .foregroundStyle(palette.tealSoft)
+        .foregroundStyle(palette.accentSoft)
         .lineLimit(1)
         .fixedSize()
         .padding(.top, 20)
