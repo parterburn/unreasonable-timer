@@ -74,8 +74,10 @@ sleep 3;  capture setup-light
 
 # Further down the form: relaunch scrolled to the controls (toggle, theme, accent, Start)
 # and to the bottom (history).
+# The form reopens with the last timer's theme (light, from above), so switch back to dark first.
 launch -UTSetupScroll controls
-capture setup-dark-controls
+open "untimer://edit?time=600"
+sleep 3;  capture setup-dark-controls
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light-controls
 
@@ -87,7 +89,8 @@ sleep 3;  capture setup-light-bottom
 
 # Another accent (orange), set through the argument domain the way a saved choice would be.
 launch -UTSetupScroll controls -accentColor "#E8743B"
-capture accent-setup-dark
+open "untimer://edit?time=600"
+sleep 3;  capture accent-setup-dark
 open "untimer://start?time=20&lead=$LEAD&people=12"
 sleep 3;  capture accent-countdown-running
 sleep 11; capture accent-countdown-final     # ~5 left
