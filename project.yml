@@ -1,0 +1,111 @@
+name: UnreasonableTimer
+
+options:
+  bundleIdPrefix: com.unreasonablegroup
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  developmentLanguage: en
+
+settings:
+  base:
+    # Swift 6 toolchain, Swift 5 language mode: the AppKit/Sparkle/KeyboardShortcuts glue is
+    # not yet written against strict concurrency checking. Flip to "6.0" once it builds clean.
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  # The pure timer logic, shared with `swift test` (see Package.swift).
+  TimerCore:
+    path: .
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
+
+targets:
+  UnreasonableTimer:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Views
+      - path: Sources/Store
+      - path: Sources/System
+      - path: Sources/Intents
+      - path: Resources
+        excludes:
+          - Info.plist
+    dependencies:
+      - package: TimerCore
+      - package: KeyboardShortcuts
+      - package: Sparkle
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Unreasonable Timer
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: "Copyright © Unreasonable Group"
+        CFBundleURLTypes:
+          - CFBundleURLName: com.unreasonablegroup.timer
+            CFBundleURLSchemes:
+              - untimer
+        # Sparkle. Replace SUPublicEDKey with the output of Sparkle's `generate_keys`
+        # (see README); until then the app skips starting the updater.
+        SUFeedURL: https://github.com/unreasonable/timer/releases/latest/download/appcast.xml
+        SUPublicEDKey: REPLACE_WITH_SPARKLE_PUBLIC_KEY
+        SUEnableAutomaticChecks: true
+    settings:
+      base:
+        PRODUCT_NAME: Unreasonable Timer
+        PRODUCT_MODULE_NAME: UnreasonableTimer
+        PRODUCT_BUNDLE_IDENTIFIER: com.unreasonablegroup.timer
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        # Local builds sign ad hoc; releases are signed for distribution outside the App Store
+        # (scripts/release.sh passes DEVELOPMENT_TEAM).
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "-"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+
+  UnreasonableTimerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - package: TimerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.unreasonablegroup.timer.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  UnreasonableTimer:
+    build:
+      targets:
+        UnreasonableTimer: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - UnreasonableTimerTests
+    profile:
+      config: Release
+    archive:
+      config: Release
