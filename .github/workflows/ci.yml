@@ -78,6 +78,58 @@ jobs:
             echo "$tool: ${found:-MISSING}"
             [ -n "$found" ] || exit 1
           done
+      - name: Sparkle dry run (key setup, DMG, signed appcast)
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+
+          # A throwaway keychain, unlocked and set as the default, so Sparkle's tools can store
+          # and read their key without a prompt on a headless runner.
+          KEYCHAIN="$RUNNER_TEMP/ci.keychain-db"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+
+          # The real setup script: creates a key and writes its public half into project.yml.
+          cp project.yml project.yml.orig
+          DERIVED_DATA=build scripts/setup-sparkle.sh
+          KEY="$(awk '/SUPublicEDKey:/ { print $2; exit }' project.yml)"
+          echo "public key: $KEY"
+          cp project.yml.orig project.yml
+
+          GEN_KEYS="$(find build/SourcePackages -type f -name generate_keys -perm -u+x | head -n 1)"
+          GEN_APPCAST="$(find build/SourcePackages -type f -name generate_appcast -perm -u+x | head -n 1)"
+          "$GEN_KEYS" -x "$RUNNER_TEMP/sparkle-key"
+
+          # The app inside the DMG must carry the matching public key; changing its Info.plist
+          # invalidates the signature, so sign again.
+          APP="signing-test/Unreasonable Timer.app"
+          /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $KEY" "$APP/Contents/Info.plist"
+          scripts/sign-app.sh "$APP" - > /dev/null
+
+          mkdir -p dmg-test updates-test
+          cp -R "$APP" dmg-test/
+          ln -s /Applications dmg-test/Applications
+          hdiutil create -volname "Unreasonable Timer" -srcfolder dmg-test -ov -format UDZO updates-test/UnreasonableTimer-1.0.0.dmg
+          cp release-notes/1.0.0.md updates-test/UnreasonableTimer-1.0.0.md
+
+          "$GEN_APPCAST" \
+            --download-url-prefix "https://example.com/releases/v1.0.0/" \
+            --embed-release-notes \
+            --ed-key-file "$RUNNER_TEMP/sparkle-key" \
+            updates-test
+          cat updates-test/appcast.xml
+
+          for expected in \
+            'sparkle:edSignature' \
+            '<sparkle:version>1</sparkle:version>' \
+            'sparkle:shortVersionString>1.0.0' \
+            'sparkle:minimumSystemVersion>14.0' \
+            'https://example.com/releases/v1.0.0/UnreasonableTimer-1.0.0.dmg'; do
+            grep -q "$expected" updates-test/appcast.xml || { echo "The appcast is missing: $expected"; exit 1; }
+          done
+          echo "Sparkle dry run passed"
       - name: Launch smoke test
         run: |
           APP="build/Build/Products/Debug/Unreasonable Timer.app"

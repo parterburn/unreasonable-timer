@@ -100,23 +100,25 @@ updated in place with [Sparkle](https://sparkle-project.org).
      --apple-id you@example.com --team-id ABCDE12345
    ```
 
-3. **Sparkle signing keys (optional for a first release).** Without them you still get a signed,
-   notarized DMG, but installed copies can't update themselves. Build once (`xcodegen generate` and
-   build, so Sparkle is downloaded), then run the `generate_keys` tool from the Sparkle package
-   artifacts:
+3. **Sparkle update key (needed for self-updating).** Without it you still get a signed, notarized
+   DMG, but installed copies can't update themselves. Run:
 
    ```sh
-   find ~/Library/Developer/Xcode/DerivedData -name generate_keys -path '*Sparkle*' | head -1
+   scripts/setup-sparkle.sh
    ```
 
-   It stores the private key in your login Keychain and prints the public key. Put the public key
-   in `project.yml` as `SUPublicEDKey`. Until you do, the app skips starting the updater. Back up
-   the private key (`generate_keys -x`): without it you can never ship an update to installed
-   copies.
+   It creates the EdDSA signing key in your login Keychain (or reuses the one there) and writes
+   the public half into `project.yml` as `SUPublicEDKey`. The private key never touches the repo.
+   **Back it up** with the `generate_keys -x <file>` command the script prints, and keep the file
+   in your password manager: without that key you can never ship an update to copies that are
+   already installed. Commit the `project.yml` change.
 
 ### Each release
 
-1. Bump `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION`) in `project.yml`.
+1. Bump `MARKETING_VERSION` **and `CURRENT_PROJECT_VERSION`** in `project.yml`. Sparkle only offers
+   an update whose build number (`CURRENT_PROJECT_VERSION`) is higher than the installed one, so the
+   script refuses to build if it isn't higher than the newest build in `release/updates/appcast.xml`.
+   Optionally write what changed in `release-notes/<version>.md`; it is shown in the update window.
 2. Run:
 
    ```sh
@@ -137,7 +139,15 @@ updated in place with [Sparkle](https://sparkle-project.org).
    `releases/latest/download/appcast.xml`.
 
 Keep the `release/updates` folder between releases; it holds the older DMGs the appcast history
-is built from.
+is built from. The first run after `setup-sparkle.sh` makes macOS ask whether `generate_appcast`
+may use the key in your Keychain: choose Always Allow.
+
+### Testing an update
+
+CI checks that the appcast is generated and signed, but only a real install can prove the update
+itself works. Release 1.0.0, install it from the DMG, then release a build with a higher
+`CURRENT_PROJECT_VERSION` and choose **Check for Updates…** in the installed app. It should offer
+the new version, download it, replace itself and relaunch.
 
 ## Layout
 

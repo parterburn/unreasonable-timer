@@ -68,6 +68,17 @@ case "$SPARKLE_KEY" in
 esac
 if [ "$SPARKLE_READY" -eq 0 ]; then
   echo "  Sparkle:  no SUPublicEDKey in project.yml, so the update feed will be skipped."
+  echo "            Run scripts/setup-sparkle.sh to enable updates."
+fi
+
+# Sparkle only offers an update whose build number is higher than the installed one. Catch a
+# forgotten bump now, not after notarization.
+if [ "$SPARKLE_READY" -eq 1 ] && [ -f "$UPDATES/appcast.xml" ]; then
+  LAST_BUILD="$(grep -o '<sparkle:version>[0-9]*</sparkle:version>' "$UPDATES/appcast.xml" | sed -E 's/<[^>]+>//g' | sort -n | tail -n 1)"
+  if [ -n "$LAST_BUILD" ] && [ "$BUILD_NUMBER" -le "$LAST_BUILD" ]; then
+    fail "CURRENT_PROJECT_VERSION is $BUILD_NUMBER, but $UPDATES/appcast.xml already has build $LAST_BUILD.
+Sparkle only offers updates with a higher build number, so bump CURRENT_PROJECT_VERSION in project.yml."
+  fi
 fi
 
 rm -rf "$ARCHIVE" "$EXPORT_DIR" "$OUT/dmg-staging" "$DMG"
@@ -123,10 +134,18 @@ if [ "$SPARKLE_READY" -eq 1 ]; then
   GENERATE_APPCAST="$(find "$OUT/DerivedData/SourcePackages" -type f -name generate_appcast -perm -u+x 2>/dev/null | head -n 1)"
   [ -n "$GENERATE_APPCAST" ] || fail "Could not find Sparkle's generate_appcast in the build's package artifacts."
   cp "$DMG" "$UPDATES/"
-  # Signs each archive with the EdDSA key in your login Keychain (see README, one-time setup).
-  "$GENERATE_APPCAST" \
-    --download-url-prefix "https://github.com/$REPO/releases/download/$TAG/" \
-    "$UPDATES"
+  APPCAST_ARGS=(--download-url-prefix "https://github.com/$REPO/releases/download/$TAG/")
+  # Release notes for Sparkle's update window: release-notes/<version>.md, if present.
+  if [ -f "release-notes/$VERSION.md" ]; then
+    cp "release-notes/$VERSION.md" "$UPDATES/$(basename "$DMG" .dmg).md"
+    APPCAST_ARGS+=(--embed-release-notes)
+  fi
+  # Signs each archive with the EdDSA key: from SPARKLE_KEY_FILE if set (CI), otherwise from
+  # your login Keychain (see README, one-time setup).
+  if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+    APPCAST_ARGS+=(--ed-key-file "$SPARKLE_KEY_FILE")
+  fi
+  "$GENERATE_APPCAST" "${APPCAST_ARGS[@]}" "$UPDATES"
   ASSETS+=("$UPDATES/appcast.xml")
 else
   step "6/6 Skipping the Sparkle appcast (no SUPublicEDKey yet)"
