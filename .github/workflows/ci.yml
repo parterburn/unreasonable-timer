@@ -108,14 +108,16 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $KEY" "$APP/Contents/Info.plist"
           scripts/sign-app.sh "$APP" - > /dev/null
 
+          VERSION="$(awk '/MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
+          BUILD="$(awk '/CURRENT_PROJECT_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
           mkdir -p dmg-test updates-test
           cp -R "$APP" dmg-test/
           ln -s /Applications dmg-test/Applications
-          hdiutil create -volname "Unreasonable Timer" -srcfolder dmg-test -ov -format UDZO updates-test/UnreasonableTimer-1.0.0.dmg
-          cp release-notes/1.0.0.md updates-test/UnreasonableTimer-1.0.0.md
+          hdiutil create -volname "Unreasonable Timer" -srcfolder dmg-test -ov -format UDZO updates-test/UnreasonableTimer-$VERSION.dmg
+          cp "release-notes/$VERSION.md" "updates-test/UnreasonableTimer-$VERSION.md"
 
           "$GEN_APPCAST" \
-            --download-url-prefix "https://example.com/releases/v1.0.0/" \
+            --download-url-prefix "https://example.com/releases/v$VERSION/" \
             --embed-release-notes \
             --ed-key-file "$RUNNER_TEMP/sparkle-key" \
             updates-test
@@ -123,10 +125,10 @@ jobs:
 
           for expected in \
             'sparkle:edSignature' \
-            '<sparkle:version>1</sparkle:version>' \
-            'sparkle:shortVersionString>1.0.0' \
+            "<sparkle:version>$BUILD</sparkle:version>" \
+            "sparkle:shortVersionString>$VERSION" \
             'sparkle:minimumSystemVersion>14.0' \
-            'https://example.com/releases/v1.0.0/UnreasonableTimer-1.0.0.dmg'; do
+            "https://example.com/releases/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
             grep -q "$expected" updates-test/appcast.xml || { echo "The appcast is missing: $expected"; exit 1; }
           done
           echo "Sparkle dry run passed"
