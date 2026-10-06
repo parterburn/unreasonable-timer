@@ -104,8 +104,13 @@ struct SetupView: View {
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
+                .safeAreaInset(edge: .bottom, spacing: 0) { settingsButton }
         } detail: {
-            form
+            if controller.showSettingsPane {
+                settingsPane
+            } else {
+                form
+            }
         }
         .tint(accent.color)
         .onAppear {
@@ -118,7 +123,16 @@ struct SetupView: View {
             }
         }
         .onChange(of: controller.formPrefill) { _, _ in consumePrefill() }
-        .onChange(of: selection) { _, item in load(item) }
+        .onChange(of: selection) { _, item in
+            // Picking a timer leaves settings for the form.
+            if item != nil { controller.showSettingsPane = false }
+            load(item)
+        }
+        .onChange(of: controller.showSettingsPane) { _, showing in
+            // Nothing in the timer list stays highlighted while settings are up, so any timer
+            // can be picked to go back.
+            if showing { selection = nil }
+        }
         .onChange(of: focus) { old, new in
             if old == .minutes || old == .seconds { normalizeTime() }
             // Show the moment the field being edited appears in.
@@ -204,6 +218,52 @@ struct SetupView: View {
                 controller.open(config, autostart: false)
             }
         }
+    }
+
+    /// Bottom left of the sidebar: app settings, in place of the timer form.
+    private var settingsButton: some View {
+        let active = controller.showSettingsPane
+        return Button {
+            controller.showSettingsPane.toggle()
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(active ? AnyShapeStyle(accent.color.opacity(0.22)) : AnyShapeStyle(Color.clear))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .help("Settings (⌘,)")
+    }
+
+    /// App settings in the detail pane, with Done to go back to the timer being edited.
+    private var settingsPane: some View {
+        SettingsView(controller: controller, updater: Updater.shared)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        controller.showSettingsPane = false
+                    } label: {
+                        Text("Done").frame(minWidth: 80)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.bar)
+                .overlay(alignment: .top) { Divider() }
+            }
     }
 
     private func config(for item: SidebarItem) -> TimerConfig? {

@@ -138,22 +138,14 @@ launch
 open "untimer://edit?time=600&$ORANGE"
 sleep 3;  capture accent-setup-light
 
-# Settings, in front of the main window. The whole screen, since the main window is larger.
-capture_screen() { # <name>
-  screencapture -x "$OUT/$1.png"
-  sips -s format jpeg -s formatOptions 82 "$OUT/$1.png" --out "$OUT/$1.jpg" >/dev/null
-  rm "$OUT/$1.png"
-  echo "captured $1"
-}
+# Settings, in the main window's settings pane (one page), from the top to the footer.
 launch -UTOpenSettings YES
-capture_screen settings
-# Scrolled to the end (Sounds, Updates, the footer). Settings opens centred on the screen.
-read -r _ _ SW SH <<<"$(system_profiler SPDisplaysDataType | awk '/Resolution/ { print 0, 0, $2, $4; exit }')"
-"$CLICK_TOOL" scroll $(( ${SW:-1024} / 2 )) $(( ${SH:-768} / 2 )) -60
-sleep 1;  capture_screen settings-bottom
-launch -UTOpenSettings YES -UTSettingsTab shortcuts
-"$CLICK_TOOL" scroll $(( ${SW:-1024} / 2 )) $(( ${SH:-768} / 2 )) -60
-sleep 1;  capture_screen settings-shortcuts-bottom
+capture settings-1-top
+read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
+"$CLICK_TOOL" scroll $((WX + WW * 2 / 3)) $((WY + WH / 2)) -25
+sleep 1;  capture settings-2-shortcuts
+"$CLICK_TOOL" scroll $((WX + WW * 2 / 3)) $((WY + WH / 2)) -80
+sleep 1;  capture settings-3-bottom
 
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"

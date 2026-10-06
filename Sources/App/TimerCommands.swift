@@ -17,6 +17,12 @@ struct TimerCommands: Commands {
                 .disabled(!updater.canCheckForUpdates)
         }
 
+        // Settings live in the main window (see TimerController.showSettings).
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { controller.showSettings() }
+                .keyboardShortcut(",", modifiers: .command)
+        }
+
         // Zoom applies to the countdown, like zooming the web page in a browser. The countdown
         // view also takes ⌘= for Zoom In.
         CommandGroup(before: .toolbar) {

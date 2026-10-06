@@ -22,9 +22,9 @@ struct MenuBarLabel: View {
 struct MenuBarView: View {
     @ObservedObject var controller: TimerController
     @ObservedObject var store: PresetStore
+    @ObservedObject var updater: Updater
 
     @AppStorage(AppSettings.presentDisplay) private var presentDisplay = 0
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         if controller.hasTimer {
@@ -71,10 +71,13 @@ struct MenuBarView: View {
         Divider()
         // Not SettingsLink: the menu bar doesn't bring the app forward, so Settings opened (or
         // was already open) behind whatever app is in front, and the click seemed to do nothing.
-        Button("Settings…") {
-            NSApp.activate()
-            openSettings()
-            SettingsWindow.bringToFront()
+        Button("Settings…") { controller.showSettings() }
+        if updater.isConfigured {
+            Button("Check for Updates…") {
+                NSApp.activate()
+                updater.checkForUpdates()
+            }
+            .disabled(!updater.canCheckForUpdates)
         }
         Button("Quit Unreasonable Timer") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

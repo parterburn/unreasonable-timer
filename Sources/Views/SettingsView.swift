@@ -3,6 +3,8 @@ import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
+/// App settings on one page: shown in the main window from the sidebar's gear, and in their own
+/// window when ⌘, is pressed while a timer is on screen.
 struct SettingsView: View {
     @ObservedObject var controller: TimerController
     @ObservedObject var updater: Updater
@@ -15,23 +17,17 @@ struct SettingsView: View {
     /// Toggled to make the "Open at login" row re-read `SMAppService`'s status.
     @State private var loginRefresh = false
     @State private var loginError: String?
-    /// `-UTSettingsTab shortcuts` opens on that tab, for scripts/ci-screenshots.sh.
-    @State private var tab = UserDefaults.standard.string(forKey: "UTSettingsTab") ?? "general"
 
     var body: some View {
-        TabView(selection: $tab) {
+        Form {
             general
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag("general")
             shortcuts
-                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
-                .tag("shortcuts")
+            updates
         }
-        .frame(width: 500)
-        .scenePadding()
+        .formStyle(.grouped)
     }
 
-    /// The last line of each tab, under its final group.
+    /// The last line of the page, under Updates.
     private var madeBy: some View {
         Text("Made by people + 🤖 from [Unreasonable](https://unreasonablegroup.com)")
             .font(.footnote)
@@ -42,58 +38,60 @@ struct SettingsView: View {
 
     // MARK: General
 
+    @ViewBuilder
     private var general: some View {
-        Form {
-            Section {
-                Toggle("Keep the display awake while a timer runs", isOn: $keepAwake)
-                    .onChange(of: keepAwake) { controller.settingsChanged() }
-                Toggle("Keep the timer above other windows", isOn: $floatOnTop)
-                    .onChange(of: floatOnTop) { controller.settingsChanged() }
-                Picker("Present fullscreen on", selection: $presentDisplay) {
-                    Text("Current display").tag(0)
-                    ForEach(DisplayPresenter.displays) { display in
-                        Text(display.name).tag(display.id)
-                    }
-                }
-            } header: {
-                Text("Timer")
-            } footer: {
-                Text("Each timer has its own sound, accent color and theme. Set them on the setup screen.")
-            }
-
-            Section("App") {
-                Toggle("Show in the menu bar", isOn: $showMenuBarItem)
-                Toggle("Open at login", isOn: launchAtLogin)
-                if let loginError = loginError {
-                    Text(loginError).font(.footnote).foregroundStyle(.red)
+        Section {
+            Toggle("Keep the display awake while a timer runs", isOn: $keepAwake)
+                .onChange(of: keepAwake) { controller.settingsChanged() }
+            Toggle("Keep the timer above other windows", isOn: $floatOnTop)
+                .onChange(of: floatOnTop) { controller.settingsChanged() }
+            Picker("Present fullscreen on", selection: $presentDisplay) {
+                Text("Current display").tag(0)
+                ForEach(DisplayPresenter.displays) { display in
+                    Text(display.name).tag(display.id)
                 }
             }
+        } header: {
+            Text("Timer")
+        } footer: {
+            Text("Each timer has its own sound, accent color and theme; set them when you edit the timer.")
+        }
 
-            Section {
-                if updater.isConfigured {
-                    Toggle("Check for updates automatically", isOn: Binding(
-                        get: { updater.automaticallyChecks },
-                        set: { updater.automaticallyChecks = $0 }
-                    ))
-                    HStack {
-                        Button("Check Now") { updater.checkForUpdates() }
-                            .disabled(!updater.canCheckForUpdates)
-                        Spacer()
-                        Text(versionText).foregroundStyle(.secondary)
-                    }
-                } else {
-                    LabeledContent("Version", value: versionText)
-                    Text("Updates aren't set up in this build. See the README to add a Sparkle key.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Updates")
-            } footer: {
-                madeBy
+        Section("App") {
+            Toggle("Show in the menu bar", isOn: $showMenuBarItem)
+            Toggle("Open at login", isOn: launchAtLogin)
+            if let loginError = loginError {
+                Text(loginError).font(.footnote).foregroundStyle(.red)
             }
         }
-        .formStyle(.grouped)
+    }
+
+    // MARK: Updates
+
+    private var updates: some View {
+        Section {
+            if updater.isConfigured {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { updater.automaticallyChecks },
+                    set: { updater.automaticallyChecks = $0 }
+                ))
+                HStack {
+                    Button("Check Now") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                    Spacer()
+                    Text(versionText).foregroundStyle(.secondary)
+                }
+            } else {
+                LabeledContent("Version", value: versionText)
+                Text("Updates aren't set up in this build. See the README to add a Sparkle key.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Updates")
+        } footer: {
+            madeBy
+        }
     }
 
     /// "Version 1.2.0 (3)"
@@ -130,45 +128,41 @@ struct SettingsView: View {
 
     // MARK: Shortcuts
 
+    @ViewBuilder
     private var shortcuts: some View {
-        Form {
-            Section {
-                KeyboardShortcuts.Recorder("Start / pause:", name: .toggleTimer)
-                KeyboardShortcuts.Recorder("Reset:", name: .resetTimer)
-                KeyboardShortcuts.Recorder("Add 15 seconds:", name: .addTime)
-                KeyboardShortcuts.Recorder("Remove 15 seconds:", name: .removeTime)
-                KeyboardShortcuts.Recorder("Show timer:", name: .showTimer)
-            } header: {
-                Text("Global shortcuts")
-            } footer: {
-                Text("None are set until you record one. These work from any app; Start / pause begins your most recent timer when none is open.")
-            }
-
-            Section("In the timer") {
-                shortcutRow("Start / pause", "Space", note: "or click")
-                shortcutRow("Add / remove 15 seconds", "↑", "↓", note: "hold to repeat")
-                shortcutRow("Reset", "R")
-                shortcutRow("Fullscreen on the selected display", "F")
-                shortcutRow("Leave fullscreen", "Esc")
-                shortcutRow("Jump to a point", note: "click the progress bar")
-                shortcutRow("Zoom in / out / actual size", "⌘+", "⌘−", "⌘0")
-            }
-
-            Section {
-                shortcutRow("Reset", "⌘R")
-                shortcutRow("Add / remove 15 seconds", "⌘↑", "⌘↓")
-                shortcutRow("Back to the setup form", "⌘E")
-                shortcutRow("Present on the selected display", "⇧⌘F")
-                shortcutRow("Fill the form from a copied link", "⇧⌘V")
-                shortcutRow("Start a saved timer", "⌘1", "…", "⌘9")
-                shortcutRow("Settings", "⌘,")
-            } header: {
-                Text("Anywhere in the app")
-            } footer: {
-                madeBy
-            }
+        Section {
+            KeyboardShortcuts.Recorder("Start / pause:", name: .toggleTimer)
+            KeyboardShortcuts.Recorder("Reset:", name: .resetTimer)
+            KeyboardShortcuts.Recorder("Add 15 seconds:", name: .addTime)
+            KeyboardShortcuts.Recorder("Remove 15 seconds:", name: .removeTime)
+            KeyboardShortcuts.Recorder("Show timer:", name: .showTimer)
+        } header: {
+            Text("Shortcuts from any app")
+        } footer: {
+            Text("None are set until you record one. These work from any app; Start / pause begins your most recent timer when none is open.")
         }
-        .formStyle(.grouped)
+
+        Section("In the timer") {
+            shortcutRow("Start / pause", "Space", note: "or click")
+            shortcutRow("Add / remove 15 seconds", "↑", "↓", note: "hold to repeat")
+            shortcutRow("Reset", "R")
+            shortcutRow("Fullscreen on the selected display", "F")
+            shortcutRow("Leave fullscreen", "Esc")
+            shortcutRow("Jump to a point", note: "click the progress bar")
+            shortcutRow("Zoom in / out / actual size", "⌘+", "⌘−", "⌘0")
+        }
+
+        Section {
+            shortcutRow("Reset", "⌘R")
+            shortcutRow("Add / remove 15 seconds", "⌘↑", "⌘↓")
+            shortcutRow("Edit the timer", "⌘E")
+            shortcutRow("Present on the selected display", "⇧⌘F")
+            shortcutRow("Fill the form from a copied link", "⇧⌘V")
+            shortcutRow("Start a saved timer", "⌘1", "…", "⌘9")
+            shortcutRow("Settings", "⌘,")
+        } header: {
+            Text("Anywhere in the app")
+        }
     }
 
     /// A built-in shortcut, drawn as key caps.

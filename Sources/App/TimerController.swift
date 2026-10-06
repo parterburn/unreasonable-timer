@@ -48,12 +48,16 @@ final class TimerController: ObservableObject {
     @Published private(set) var isFullscreen = false
     /// A config the setup form should load (from a pasted link or "Load into Form").
     @Published var formPrefill: TimerConfig?
+    /// The setup screen shows app settings instead of the timer form.
+    @Published var showSettingsPane = false
 
     let store: PresetStore
     let clock: ClockModel
 
     /// Set by the root view so non-view code (hotkeys, intents, URLs) can reopen the window.
     var openMainWindow: (() -> Void)?
+    /// Set by the root view: opens the Settings scene's own window.
+    var openSettingsWindow: (() -> Void)?
     private(set) weak var mainWindow: NSWindow?
 
     private var engine: TimerEngine
@@ -82,6 +86,7 @@ final class TimerController: ObservableObject {
     /// page; quick entry points (menu bar, hotkeys, Shortcuts, links) pass `autostart`.
     func open(_ newConfig: TimerConfig, autostart: Bool) {
         stopTicking()
+        showSettingsPane = false
         engine.load(newConfig)
         config = newConfig
         store.remember(newConfig)
@@ -182,6 +187,19 @@ final class TimerController: ObservableObject {
     }
 
     // MARK: Window
+
+    /// ⌘, and the menu bar: settings in the main window's setup screen, or in their own window
+    /// while a timer is on screen (leaving the countdown for the setup screen would stop it).
+    func showSettings() {
+        if screen == .setup {
+            showSettingsPane = true
+            showMainWindow()
+        } else {
+            NSApp.activate()
+            openSettingsWindow?()
+            SettingsWindow.bringToFront()
+        }
+    }
 
     func showMainWindow() {
         NSApp.activate()

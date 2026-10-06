@@ -65,9 +65,11 @@ and `chime15=1` (also chime at 15 seconds left); the web page ignores them.
 
 ### Settings
 
-Keep the display awake while running (on by default), keep the timer above other windows,
-which display to go fullscreen on, menu bar item, open at login, and updates. Sound, accent color
-and theme belong to each timer, on the setup screen.
+The gear at the bottom left of the setup screen (or ⌘,) shows the app settings on one page:
+keep the display awake while running (on by default), keep the timer above other windows, which
+display to go fullscreen on, menu bar item, open at login, shortcuts, and updates. While a timer
+is on screen, ⌘, opens them in their own window instead, so the countdown keeps going. Sound,
+accent color and theme belong to each timer, on the setup screen.
 
 ## Building
 

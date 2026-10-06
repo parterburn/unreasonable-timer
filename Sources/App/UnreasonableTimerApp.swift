@@ -29,14 +29,16 @@ struct UnreasonableTimerApp: App {
         }
 
         MenuBarExtra(isInserted: $showMenuBarItem) {
-            MenuBarView(controller: controller, store: store)
+            MenuBarView(controller: controller, store: store, updater: updater)
         } label: {
             MenuBarLabel(controller: controller)
         }
         .menuBarExtraStyle(.menu)
 
+        // Used only while a timer is on screen; otherwise settings open in the main window.
         Settings {
             SettingsView(controller: controller, updater: updater)
+                .frame(width: 520, height: 640)
         }
     }
 }
@@ -66,8 +68,9 @@ struct RootView: View {
         .onOpenURL { controller.handle(url: $0) }
         .onAppear {
             controller.openMainWindow = { openWindow(id: "main") }
+            controller.openSettingsWindow = { openSettings() }
             // For scripted screenshots (scripts/ci-screenshots.sh).
-            if UserDefaults.standard.bool(forKey: "UTOpenSettings") { openSettings() }
+            if UserDefaults.standard.bool(forKey: "UTOpenSettings") { controller.showSettings() }
             if UserDefaults.standard.string(forKey: "UTAppearance") == "dark" {
                 NSApp.appearance = NSAppearance(named: .darkAqua)
             }
