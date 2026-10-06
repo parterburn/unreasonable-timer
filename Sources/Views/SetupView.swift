@@ -39,8 +39,15 @@ private struct Draft: Equatable {
     /// nil until there is at least a second on the clock (Start stays disabled).
     func makeConfig() -> TimerConfig? {
         guard totalSeconds > 0 else { return nil }
-        return TimerConfig(
-            seconds: min(totalSeconds, TimerConfig.maxSeconds),
+        return config(seconds: totalSeconds)
+    }
+
+    /// What the preview draws, even while the time is still 0.
+    var previewConfig: TimerConfig { config(seconds: max(totalSeconds, 1)) }
+
+    private func config(seconds: Int) -> TimerConfig {
+        TimerConfig(
+            seconds: min(seconds, TimerConfig.maxSeconds),
             leadText: lead,
             warningText: warning,
             doneText: done,
@@ -71,6 +78,9 @@ struct SetupView: View {
     @State private var draft: Draft
     @State private var selection: SidebarItem?
     @State private var showSaveAlert = false
+    /// Which moment of the countdown the preview shows; follows the field being edited.
+    /// (`-UTPreviewMoment end` picks one for scripts/ci-screenshots.sh.)
+    @State private var previewMoment = PreviewMoment(rawValue: UserDefaults.standard.string(forKey: "UTPreviewMoment") ?? "") ?? .start
     @State private var saveName = ""
     @FocusState private var focus: SetupField?
     @ObservedObject private var chimes = ChimePlayer.shared
@@ -109,9 +119,17 @@ struct SetupView: View {
         }
         .onChange(of: controller.formPrefill) { _, _ in consumePrefill() }
         .onChange(of: selection) { _, item in load(item) }
-        .onChange(of: focus) { old, _ in
+        .onChange(of: focus) { old, new in
             if old == .minutes || old == .seconds { normalizeTime() }
+            // Show the moment the field being edited appears in.
+            switch new {
+            case .minutes, .seconds, .lead: previewMoment = .start
+            case .warning: previewMoment = .warning
+            case .done, .people: previewMoment = .end
+            case nil: break
+            }
         }
+        .onChange(of: draft.countOver) { previewMoment = .end }
         .onChange(of: draft.sound) { chimes.stop() }
         .onDisappear { chimes.stop() }
         .alert("Name this timer", isPresented: $showSaveAlert) {
@@ -209,12 +227,20 @@ struct SetupView: View {
     private var form: some View {
         Form {
             Section {
-                CountdownPreview(
-                    palette: Palette.make(draft.theme, accent: accent),
-                    time: TimerFormat.clock(min(draft.totalSeconds, TimerConfig.maxSeconds)),
-                    text: draft.lead.isEmpty ? nil : draft.lead
-                )
-                .frame(maxWidth: 420)
+                VStack(spacing: 10) {
+                    CountdownPreview(config: draft.previewConfig, moment: previewMoment)
+                        .frame(maxWidth: 440)
+                    Picker("Preview", selection: $previewMoment) {
+                        ForEach(PreviewMoment.allCases, id: \.self) { moment in
+                            Text(moment.title).tag(moment)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                    .help("Which moment of the countdown to preview")
+                }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
                 durationEditor
@@ -311,6 +337,7 @@ struct SetupView: View {
                         draft.minutes = String(format: "%02d", minutes)
                         draft.seconds = "00"
                         focus = nil
+                        previewMoment = .start
                     }
                     .buttonStyle(QuickDurationStyle(selected: current, accent: accent.color))
                 }
@@ -512,47 +539,75 @@ private struct QuickDurationStyle: ButtonStyle {
     }
 }
 
-/// A small, live picture of the countdown as it will look: theme, accent, time and text.
+/// A moment of the countdown for the preview to show.
+private enum PreviewMoment: String, CaseIterable {
+    case start, warning, end
+
+    var title: String {
+        switch self {
+        case .start: return "Start"
+        case .warning: return "15 seconds left"
+        case .end: return "Time is up"
+        }
+    }
+}
+
+/// The countdown as it will look at `moment`: the real stage (same layout, wrapping, glow and
+/// overtime lines), laid out for a typical 1280 × 800 window and scaled down to fit.
 private struct CountdownPreview: View {
-    let palette: Palette
-    let time: String
-    let text: String?
+    let config: TimerConfig
+    let moment: PreviewMoment
+
+    private static let canvas = CGSize(width: 1280, height: 800)
+
+    /// The engine's own state at that moment: 12 seconds left, or 42 seconds past zero.
+    private var snapshot: TimerEngine.Snapshot {
+        var engine = TimerEngine(config: config)
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        engine.start(now: start)
+        let elapsed: Int
+        switch moment {
+        case .start: elapsed = 0
+        case .warning: elapsed = max(config.seconds - 12, 0)
+        case .end: elapsed = config.seconds + 42
+        }
+        let now = start.addingTimeInterval(TimeInterval(elapsed))
+        engine.tick(now: now)
+        return engine.snapshot(now: now)
+    }
 
     var body: some View {
+        let palette = Palette.make(config.theme, accent: AccentColor(config: config))
+        let snap = snapshot
+        let canvas = Self.canvas
         GeometryReader { geo in
-            let width = geo.size.width
             ZStack {
                 TimerBackground(palette: palette)
-                VStack(spacing: width * 0.025) {
-                    Text(time)
-                        .font(.inter(width * 0.15))
-                        .monospacedDigit()
-                        .tracking(-width * 0.0045)
-                        .foregroundStyle(palette.text)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                    if let text = text {
-                        Text(text)
-                            .font(.inter(width * 0.042, .medium))
-                            .foregroundStyle(palette.textSoft)
-                            .lineLimit(1)
+                HeatGlow(palette: palette, heat: snap.heat, expired: snap.isExpired)
+                CountdownStage(snap: snap, config: config, palette: palette, size: canvas)
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(palette.accent(0.08))
+                        Rectangle()
+                            .fill(palette.progressGradient)
+                            .scaleEffect(x: max(snap.progress, 0.0001), y: 1, anchor: .leading)
                     }
-                }
-                .padding(.horizontal, width * 0.06)
-                VStack {
-                    Spacer()
-                    Rectangle()
-                        .fill(palette.progressGradient)
-                        .frame(height: max(2, geo.size.height * 0.018))
+                    .frame(height: canvas.height * 0.008)
+                    .opacity(snap.isExpired ? 0 : 1)
                 }
             }
+            .frame(width: canvas.width, height: canvas.height)
             .environment(\.colorScheme, palette.isLight ? .light : .dark)
+            .scaleEffect(geo.size.width / canvas.width, anchor: .topLeading)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
-        .aspectRatio(16.0 / 10.0, contentMode: .fit)
+        .aspectRatio(canvas.width / canvas.height, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.separator, lineWidth: 1))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+        .allowsHitTesting(false)
         .accessibilityElement()
-        .accessibilityLabel("Preview: \(time)\(text.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("Preview at \(moment.title.lowercased()): \(snap.displayText)")
     }
 }

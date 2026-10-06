@@ -114,6 +114,17 @@ sleep 3;  capture setup-2-light-with-light-timer
 launch -UTAppearance dark
 capture setup-3-dark
 
+# The preview at each moment, with text long enough to wrap and a room size.
+LONG="lead=What%20is%20your%20favorite%20thing%20to%20do%20here%3F%20What%20is%20your%20favorite%20thing%20to%20do%20here%3F&people=12"
+open "untimer://edit?time=600&$LONG"
+sleep 3;  capture setup-4-preview-start-wrapping
+launch -UTAppearance dark -UTPreviewMoment warning
+open "untimer://edit?time=600&$LONG"
+sleep 3;  capture setup-5-preview-15-seconds-left
+launch -UTAppearance dark -UTPreviewMoment end
+open "untimer://edit?time=600&$LONG"
+sleep 3;  capture setup-6-preview-time-is-up
+
 # Another accent (Eco Purple) with the singing bowl: both belong to the timer, so a link sets them.
 ORANGE="accent=6926E3&sound=singing-bowl&chime15=1"
 launch -UTAppearance dark
