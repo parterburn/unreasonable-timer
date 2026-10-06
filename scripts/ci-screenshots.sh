@@ -84,7 +84,9 @@ capture countdown-1-paused
 read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
 "$CLICK_TOOL" right $((WX + WW / 2)) $((WY + WH / 3))
 sleep 1;  capture_screen countdown-1b-right-click-menu
-check "the right-click menu offers Reset to 0:20" sh -c "'$AX_FIND_TOOL' '$NAME' AXMenuItem 'Reset to 0:20' >/dev/null"
+# The Timer menu has one too (closed, so it has no frame); the open right-click menu is the second.
+RESETS="$("$AX_FIND_TOOL" "$NAME" AXMenuItem list 2>/dev/null | grep -c 'Reset to 0:20' || true)"
+check "the right-click menu and the Timer menu both offer Reset to 0:20 ($RESETS found)" [ "${RESETS:-0}" -ge 2 ]
 "$HOLD_KEY_TOOL" escape 0
 sleep 1
 
