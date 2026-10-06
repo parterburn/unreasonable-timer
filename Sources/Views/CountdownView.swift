@@ -211,7 +211,7 @@ struct CountdownView: View {
             }
             .frame(height: Self.barHitHeight)
             .contentShape(Rectangle())
-            .overlay(alignment: .bottomLeading) {
+            .overlay {
                 if let x = barHoverX, seekable {
                     seekLabel(at: x, width: size.width)
                 }
@@ -239,10 +239,12 @@ struct CountdownView: View {
         }
     }
 
-    /// The time a click would jump to, floating above the pointer.
+    /// The time a click would jump to, floating just above the pointer.
     private func seekLabel(at x: CGFloat, width: CGFloat) -> some View {
-        let seconds = controller.secondsLeft(atFraction: Double(x / max(width, 1)))
-        return Text(TimerFormat.clock(seconds))
+        let text = TimerFormat.clock(controller.secondsLeft(atFraction: Double(x / max(width, 1))))
+        // Roughly half the label's width (13 pt digits plus padding), to keep it inside the window.
+        let halfWidth = CGFloat(text.count) * 4.2 + 14
+        return Text(text)
             .font(.inter(13, .semibold))
             .monospacedDigit()
             .foregroundStyle(palette.text)
@@ -251,11 +253,8 @@ struct CountdownView: View {
             .background(Capsule().fill(palette.background.opacity(0.85)))
             .overlay(Capsule().stroke(palette.hairline, lineWidth: 1))
             .fixedSize()
-            // Centred on the pointer, kept inside the window, just above the strip.
-            .alignmentGuide(.leading) { d in
-                d.width / 2 - min(max(x, d.width / 2 + 8), width - d.width / 2 - 8)
-            }
-            .alignmentGuide(.bottom) { d in d.height + Self.barHitHeight + 4 }
+            // `position` is relative to the 28 pt strip: centred on the pointer, 16 pt above it.
+            .position(x: min(max(x, halfWidth + 6), width - halfWidth - 6), y: -16)
             .allowsHitTesting(false)
     }
 

@@ -71,6 +71,13 @@ if [ "$SPARKLE_READY" -eq 0 ]; then
   echo "            Run scripts/setup-sparkle.sh to enable updates."
 fi
 
+# A version that is already on GitHub can't be released again, only added to.
+if command -v gh >/dev/null 2>&1 && gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+  fail "$TAG is already published: https://github.com/$REPO/releases/tag/$TAG
+To ship new changes, bump MARKETING_VERSION and CURRENT_PROJECT_VERSION in project.yml.
+To add a missing file to $TAG instead, upload it:  gh release upload $TAG <file> --repo $REPO"
+fi
+
 # Sparkle only offers an update whose build number is higher than the installed one. Catch a
 # forgotten bump now, not after notarization.
 if [ "$SPARKLE_READY" -eq 1 ] && [ -f "$UPDATES/appcast.xml" ]; then
