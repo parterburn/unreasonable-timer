@@ -13,8 +13,8 @@ settings:
     # Swift 6 toolchain, Swift 5 language mode: the AppKit/Sparkle/KeyboardShortcuts glue is
     # not yet written against strict concurrency checking. Flip to "6.0" once it builds clean.
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.3.0"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "1.4.0"
+    CURRENT_PROJECT_VERSION: "6"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES

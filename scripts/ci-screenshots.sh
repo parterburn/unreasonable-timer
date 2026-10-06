@@ -32,6 +32,17 @@ HOLD_KEY_TOOL="${RUNNER_TEMP:-/tmp}/hold-key"
 swiftc -O scripts/hold-key.swift -o "$HOLD_KEY_TOOL"
 CLICK_TOOL="${RUNNER_TEMP:-/tmp}/click"
 swiftc -O scripts/click.swift -o "$CLICK_TOOL"
+AX_FIND_TOOL="${RUNNER_TEMP:-/tmp}/ax-find"
+swiftc -O scripts/ax-find.swift -o "$AX_FIND_TOOL"
+
+# Behaviour checks, written to checks.txt beside the images; the workflow fails after
+# committing them if any failed.
+CHECKS="$OUT/checks.txt"
+: >"$CHECKS"
+check() { # <description> <command...>
+  if "${@:2}"; then echo "PASS  $1" | tee -a "$CHECKS"; else echo "FAIL  $1" | tee -a "$CHECKS"; fi
+}
+front_app() { lsappinfo info -only name "$(lsappinfo front)" | sed -E 's/.*="(.*)"/\1/'; }
 
 system_profiler SPDisplaysDataType | grep -E "Resolution|UI Looks like" || true
 
@@ -164,5 +175,46 @@ sleep 1;  capture settings-2-shortcuts
 "$CLICK_TOOL" scroll $((WX + WW * 2 / 3)) $((WY + WH / 2)) -80
 sleep 1;  capture settings-3-bottom
 
+# The shortcut to show the timer, set the way a person does it: click the box in Settings and
+# press ⌃⌥⌘T. It should be saved, survive a relaunch, and bring the timer forward from another
+# app, even after its window was closed.
+defaults delete com.unreasonablegroup.timer KeyboardShortcuts_showTimer 2>/dev/null || true
+launch -UTOpenSettings YES
+if RECORDER="$("$AX_FIND_TOOL" "$NAME" AXSearchField)"; then
+  read -r RX RY <<<"$RECORDER"
+  echo "shortcut box at $RX,$RY"
+  "$CLICK_TOOL" "$RX" "$RY"
+  sleep 0.8; capture shortcut-1-clicked-ready-for-keys
+  "$HOLD_KEY_TOOL" t 0 ctrl opt cmd
+  sleep 1;   capture shortcut-2-recorded-ctrl-opt-cmd-t
+else
+  echo "couldn't find the shortcut box"
+fi
+SAVED="$(defaults read com.unreasonablegroup.timer KeyboardShortcuts_showTimer 2>/dev/null || true)"
+echo "saved shortcut: $SAVED"
+check "clicking the box and pressing ⌃⌥⌘T saves the shortcut" [ -n "$SAVED" ]
+
+launch   # a fresh start reads the shortcut back
+open -a Finder "$HOME"
+sleep 2
+echo "in front before the shortcut: $(front_app)"
+"$HOLD_KEY_TOOL" t 0 ctrl opt cmd
+sleep 2
+echo "in front after the shortcut: $(front_app)"
+capture_screen shortcut-3-pressed-in-finder
+check "after a relaunch, ⌃⌥⌘T in Finder brings the timer forward" [ "$(front_app)" = "$NAME" ]
+
+"$HOLD_KEY_TOOL" w 0 cmd   # close the window; the app stays running
+sleep 1
+check "⌘W closed the window" sh -c "! '$WINDOW_ID_TOOL' '$NAME' >/dev/null 2>&1"
+open -a Finder "$HOME"
+sleep 2
+"$HOLD_KEY_TOOL" t 0 ctrl opt cmd
+sleep 3
+capture_screen shortcut-4-pressed-after-closing-the-window
+check "with the window closed, ⌃⌥⌘T opens it again" sh -c "'$WINDOW_ID_TOOL' '$NAME' >/dev/null"
+check "with the window closed, ⌃⌥⌘T brings the timer forward" [ "$(front_app)" = "$NAME" ]
+
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"
+cat "$CHECKS"

@@ -57,18 +57,21 @@ means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` sele
 The Mac app also reads `accent=E8743B` (accent color), `sound=none|classic|singing-bowl|marimba`
 and `chime15=1` (also chime at 15 seconds left); the web page ignores them.
 
-### Shortcuts, Spotlight and global hotkeys
+### Shortcuts, Spotlight and the global shortcut
 
 - **Shortcuts / Spotlight:** *Start Saved Timer*, *Start Timer* (N minutes) and *Pause or Resume
   Timer*.
-- **Global hotkeys:** Settings ▸ Shortcuts. None are set by default so they can't collide with
-  anything you already use.
+- **Show the timer from any app:** record a shortcut in Settings ▸ App (click the box, press the
+  keys). None is set by default, so it can't collide with anything you already use. Every other
+  key works while the app is in front; Settings lists them, and right-clicking the timer shows
+  them too.
 
 ### Settings
 
 The gear at the bottom left of the setup screen (or ⌘,) shows the app settings on one page:
 keep the display awake while running (on by default), keep the timer above other windows, which
-display to go fullscreen on, menu bar item, open at login, shortcuts, and updates. While a timer
+display to go fullscreen on, menu bar item, open at login, the shortcut to show the timer, a list
+of the built-in keys, and updates. While a timer
 is on screen, ⌘, opens them in their own window instead, so the countdown keeps going. Sound,
 accent color and theme belong to each timer, on the setup screen.
 

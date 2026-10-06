@@ -174,7 +174,7 @@ final class TimerController: ObservableObject {
         engine.seconds(atFraction: fraction)
     }
 
-    /// For global shortcuts and Shortcuts.app: toggles the current timer, or starts the most
+    /// For Shortcuts.app: toggles the current timer, or starts the most
     /// recent one when nothing is loaded.
     func toggleOrStartLast() {
         if screen == .countdown {

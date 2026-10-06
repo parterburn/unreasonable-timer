@@ -55,3 +55,8 @@ jobs:
             sleep 5
           done
           exit 1
+      - name: Checks
+        run: |
+          # Behaviour checks from the capture run (committed beside the images above).
+          cat docs/screenshots/app/checks.txt
+          ! grep -q '^FAIL' docs/screenshots/app/checks.txt

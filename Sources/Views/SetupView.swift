@@ -288,51 +288,54 @@ struct SetupView: View {
     // MARK: Form
 
     private var form: some View {
-        Form {
-            Section {
-                durationEditor
+        FormPage {
+            FormSection {
+                FormPanel { durationEditor }
             }
 
-            Section {
+            FormSection("Text") {
                 textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength)
                 textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength)
                 textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength)
-            } header: {
-                Text("Text")
             } footer: {
                 Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. Paste a /timer link into any field to fill in the whole form.")
             }
 
-            Section {
-                Toggle("Count up after zero", isOn: $draft.countOver)
-                TextField("Number of people in the room", text: $draft.people, prompt: Text("Optional"))
-                    .focused($focus, equals: .people)
-                    .onChange(of: draft.people) { _, new in
-                        let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
-                        if digits != new { draft.people = digits }
-                    }
-            } header: {
-                Text("When time is up")
+            FormSection("When time is up") {
+                FormToggle("Count up after zero", isOn: $draft.countOver)
+                FormRow("Number of people in the room") {
+                    TextField("Number of people in the room", text: $draft.people, prompt: Text("Optional"))
+                        .labelsHidden()
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .focused($focus, equals: .people)
+                        .onChange(of: draft.people) { _, new in
+                            let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
+                            if digits != new { draft.people = digits }
+                        }
+                }
             } footer: {
                 Text("With the number of people set, the overtime shows how much of the room’s time is going by.")
             }
 
-            Section {
-                Picker("Theme", selection: $draft.theme) {
-                    Text("Dark").tag(TimerThemeMode.dark)
-                    Text("Light").tag(TimerThemeMode.light)
+            FormSection("Look") {
+                FormRow("Theme") {
+                    Picker("Theme", selection: $draft.theme) {
+                        Text("Dark").tag(TimerThemeMode.dark)
+                        Text("Light").tag(TimerThemeMode.light)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-                LabeledContent("Accent color") {
+                FormRow("Accent color") {
                     AccentPicker(hex: $draft.accent, swatchSize: 15)
                 }
-            } header: {
-                Text("Look")
             }
 
-            Section {
-                LabeledContent {
-                    Picker("Sound", selection: $draft.sound) {
+            FormSection("Sound") {
+                FormRow {
+                    Picker("Sound at zero", selection: $draft.sound) {
                         ForEach(TimerSound.allCases, id: \.self) { sound in
                             Text(sound.title).tag(sound)
                         }
@@ -345,20 +348,23 @@ struct SetupView: View {
                         previewButton(.zero, label: "the chime at zero")
                     }
                 }
-                Toggle(isOn: $draft.chimeAtWarning) {
+                FormRow {
+                    Toggle("Also chime at 15 seconds left", isOn: $draft.chimeAtWarning)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                } label: {
                     HStack(spacing: 6) {
                         Text("Also chime at 15 seconds left")
+                            .accessibilityHidden(true)
                         previewButton(.warning, label: "the chime at 15 seconds")
                     }
                 }
                 .disabled(draft.sound == .none)
-            } header: {
-                Text("Sound")
             } footer: {
                 Text(soundFootnote)
             }
         }
-        .formStyle(.grouped)
         .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
     }
 
@@ -411,13 +417,12 @@ struct SetupView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
     }
 
     private func timeField(text: Binding<String>, field: SetupField, maxDigits: Int, unit: String) -> some View {
         VStack(spacing: 4) {
-            // In a grouped Form a text field's title becomes a label beside it; the unit
-            // caption below does that job here.
+            // The unit caption below labels the field.
             TextField(unit, text: text, prompt: Text("00"))
                 .labelsHidden()
                 .textFieldStyle(.plain)
@@ -476,18 +481,23 @@ struct SetupView: View {
     // MARK: Text
 
     private func textField(_ label: String, text: Binding<String>, prompt: String, field: SetupField, limit: Int) -> some View {
-        TextField(label, text: text, prompt: Text(prompt))
-            .focused($focus, equals: field)
-            .onChange(of: text.wrappedValue) { old, new in
-                if let linked = timerLink(in: new) {
-                    // A pasted /timer link fills the whole form instead of landing in this field.
-                    text.wrappedValue = old
-                    draft = Draft(config: linked)
-                    selection = nil
-                } else if new.count > limit {
-                    text.wrappedValue = String(new.prefix(limit))
+        FormRow(label) {
+            TextField(label, text: text, prompt: Text(prompt))
+                .labelsHidden()
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .focused($focus, equals: field)
+                .onChange(of: text.wrappedValue) { old, new in
+                    if let linked = timerLink(in: new) {
+                        // A pasted /timer link fills the whole form instead of landing in this field.
+                        text.wrappedValue = old
+                        draft = Draft(config: linked)
+                        selection = nil
+                    } else if new.count > limit {
+                        text.wrappedValue = String(new.prefix(limit))
+                    }
                 }
-            }
+        }
     }
 
     /// Finds a `/timer` or `untimer://` link among the whitespace-separated words of `text`.
