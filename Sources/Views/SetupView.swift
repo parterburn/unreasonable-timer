@@ -109,7 +109,12 @@ struct SetupView: View {
             if controller.showSettingsPane {
                 settingsPane
             } else {
-                form
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        previewHeader(height: min(240, max(120, geo.size.height * 0.3)))
+                        form
+                    }
+                }
             }
         }
         .tint(accent.color)
@@ -196,7 +201,7 @@ struct SetupView: View {
         .listStyle(.sidebar)
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let item = items.first, let config = config(for: item) {
-                Button("Start Timer") { controller.open(config, autostart: false) }
+                Button("Open Timer") { controller.open(config, autostart: false) }
                 if case .recent = item {
                     Button("Save as Timer…") {
                         selection = item
@@ -245,8 +250,6 @@ struct SetupView: View {
     /// App settings in the detail pane, with Done to go back to the timer being edited.
     private var settingsPane: some View {
         SettingsView(controller: controller, updater: Updater.shared)
-            .frame(maxWidth: 760)
-            .frame(maxWidth: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack {
                     Spacer()
@@ -287,22 +290,6 @@ struct SetupView: View {
     private var form: some View {
         Form {
             Section {
-                VStack(spacing: 10) {
-                    CountdownPreview(config: draft.previewConfig, moment: previewMoment)
-                        .frame(maxWidth: 440)
-                    Picker("Preview", selection: $previewMoment) {
-                        ForEach(PreviewMoment.allCases, id: \.self) { moment in
-                            Text(moment.title).tag(moment)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .fixedSize()
-                    .help("Which moment of the countdown to preview")
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
                 durationEditor
             }
 
@@ -317,8 +304,8 @@ struct SetupView: View {
             }
 
             Section {
-                Toggle("Keep counting after zero", isOn: $draft.countOver)
-                TextField("People in the room", text: $draft.people, prompt: Text("Optional"))
+                Toggle("Count up after zero", isOn: $draft.countOver)
+                TextField("Number of people in the room", text: $draft.people, prompt: Text("Optional"))
                     .focused($focus, equals: .people)
                     .onChange(of: draft.people) { _, new in
                         let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
@@ -372,10 +359,30 @@ struct SetupView: View {
             }
         }
         .formStyle(.grouped)
-        // Rows stay a readable width in a wide window, like a System Settings pane.
-        .frame(maxWidth: 760)
-        .frame(maxWidth: .infinity)
         .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+    }
+
+    /// The preview stays in view above the scrolling form, so every change shows as it's made.
+    private func previewHeader(height: CGFloat) -> some View {
+        VStack(spacing: 8) {
+            CountdownPreview(config: draft.previewConfig, moment: previewMoment)
+                .frame(height: height)
+            Picker("Preview", selection: $previewMoment) {
+                ForEach(PreviewMoment.allCases, id: \.self) { moment in
+                    Text(moment.title).tag(moment)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            .help("Which moment of the countdown to preview")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     // MARK: Duration
@@ -508,18 +515,16 @@ struct SetupView: View {
 
             Spacer()
 
-            Text("Opens paused. Press Space to begin.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
+            // Opens the countdown paused, like the web page, so it can go up on screen before
+            // the room is ready; click or Space starts it.
             Button(action: start) {
-                Text("Start Timer").frame(minWidth: 96)
+                Text("Open Timer").frame(minWidth: 96)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
             .disabled(draft.makeConfig() == nil)
+            .help("Opens the countdown, paused. Click it or press Space to start.")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
