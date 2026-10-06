@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# A newer push replaces an older run, so stale screenshots never land on top of newer ones.
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   screenshots:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
@@ -34,11 +39,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshots/app
-          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "Update app screenshots [skip ci]"
+          # Lay this run's images onto the branch as it is now, rather than rebasing (binary
+          # files can't be merged if another commit touched them meanwhile).
+          cp -R docs/screenshots/app "$RUNNER_TEMP/shots"
           for attempt in 1 2 3; do
-            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
+            git fetch -q origin "$GITHUB_REF_NAME"
+            git reset -q --hard "origin/$GITHUB_REF_NAME"
+            rm -rf docs/screenshots/app
+            mkdir -p docs/screenshots
+            cp -R "$RUNNER_TEMP/shots" docs/screenshots/app
+            git add -A docs/screenshots/app
+            if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+            git commit -q -m "Update app screenshots [skip ci]"
+            git push origin "HEAD:$GITHUB_REF_NAME" && exit 0
             sleep 5
           done
           exit 1
