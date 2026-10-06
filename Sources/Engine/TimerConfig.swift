@@ -43,7 +43,16 @@ public struct TimerSizes: Codable, Hashable, Sendable {
     /// All at 100%.
     public var isStandard: Bool { self == TimerSizes() }
 
-    static func clamped(_ percent: Int) -> Int {
+    /// One step up (`direction` > 0) or down from `percent`, to the next multiple of `step`
+    /// (a typed 55 steps to 60 or 50), within `range`.
+    public static func stepped(_ percent: Int, by direction: Int) -> Int {
+        let next = direction > 0
+            ? (percent / step + 1) * step
+            : ((percent + step - 1) / step - 1) * step
+        return clamped(next)
+    }
+
+    public static func clamped(_ percent: Int) -> Int {
         min(max(percent, range.lowerBound), range.upperBound)
     }
 

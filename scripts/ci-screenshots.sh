@@ -184,6 +184,24 @@ else
   check "found the minutes and seconds fields" false
 fi
 
+# A size can be typed: click the box for the text under the timer, select all and type 150;
+# then ↑ while typing steps to 160.
+"$AX_FIND_TOOL" "$NAME" AXTextField list || true
+LEAD_SIZE="Size of the text under the timer"
+if SIZE_FIELD="$("$AX_FIND_TOOL" "$NAME" AXTextField "$LEAD_SIZE")"; then
+  read -r SX SY <<<"$SIZE_FIELD"
+  "$CLICK_TOOL" "$SX" "$SY"; sleep 0.5
+  "$HOLD_KEY_TOOL" a 0 cmd
+  for key in 1 5 0; do "$HOLD_KEY_TOOL" "$key" 0; sleep 0.15; done
+  sleep 0.4
+  check "typing 150 into a size box" [ "$("$AX_FIND_TOOL" "$NAME" AXTextField "$LEAD_SIZE" value)" = "150" ]
+  "$HOLD_KEY_TOOL" up 0; sleep 0.5
+  check "↑ while typing in a size box steps 150 to 160" [ "$("$AX_FIND_TOOL" "$NAME" AXTextField "$LEAD_SIZE" value)" = "160" ]
+  capture setup-9-size-typed-150-then-up-160
+else
+  check "found the size box for the text under the timer" false
+fi
+
 # Another accent (Eco Purple) with the singing bowl: both belong to the timer, so a link sets them.
 ORANGE="accent=6926E3&sound=singing-bowl&chime15=1"
 launch -UTAppearance dark

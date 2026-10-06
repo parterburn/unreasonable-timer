@@ -1,10 +1,13 @@
 // Finds an element in an app's windows by accessibility role or subrole and prints the centre
-// of the nth match (in the order the accessibility tree lists them, from 1) as "x y" (global,
-// top-left origin, like CGWindowList bounds), for scripts/ci-screenshots.sh to click; or with
-// `value`, prints its value.
+// of the nth match (in the order the accessibility tree lists them, from 1), or of the first
+// whose label (description or title) is the given text, as "x y" (global, top-left origin,
+// like CGWindowList bounds), for scripts/ci-screenshots.sh to click; or with `value`, prints
+// its value. `list` prints every match with its label and value, to see what's there.
 //   swiftc scripts/ax-find.swift -o ax-find
 //   ./ax-find "Unreasonable Timer" AXSearchField
 //   ./ax-find "Unreasonable Timer" AXTextField 2 value
+//   ./ax-find "Unreasonable Timer" AXTextField "Size of the timer"
+//   ./ax-find "Unreasonable Timer" AXTextField list
 import AppKit
 import ApplicationServices
 
@@ -14,7 +17,7 @@ guard args.count >= 3, args.count <= 5 else {
     exit(2)
 }
 let wanted = args[2]
-let index = args.count >= 4 ? Int(args[3]) ?? 1 : 1
+let selector = args.count >= 4 ? args[3] : "1"
 let printValue = args.count == 5 && args[4] == "value"
 
 func fail(_ message: String) -> Never {
@@ -42,10 +45,30 @@ func collect(_ element: AXUIElement, depth: Int) {
 }
 collect(AXUIElementCreateApplication(app.processIdentifier), depth: 0)
 
-guard matches.indices.contains(index - 1) else {
-    fail("ax-find: \(matches.count) \(wanted) in \(args[1]), asked for number \(index)")
+func label(_ element: AXUIElement) -> String {
+    (value(element, kAXDescriptionAttribute) as? String).flatMap { $0.isEmpty ? nil : $0 }
+        ?? value(element, kAXTitleAttribute) as? String ?? ""
 }
-let element = matches[index - 1]
+
+if selector == "list" {
+    for (number, element) in matches.enumerated() {
+        print("\(number + 1)\t\(label(element))\t\(value(element, kAXValueAttribute) as? String ?? "")")
+    }
+    exit(0)
+}
+
+let element: AXUIElement
+if let index = Int(selector) {
+    guard matches.indices.contains(index - 1) else {
+        fail("ax-find: \(matches.count) \(wanted) in \(args[1]), asked for number \(index)")
+    }
+    element = matches[index - 1]
+} else {
+    guard let match = matches.first(where: { label($0) == selector }) else {
+        fail("ax-find: no \(wanted) labelled \"\(selector)\" in \(args[1])")
+    }
+    element = match
+}
 
 if printValue {
     print(value(element, kAXValueAttribute) as? String ?? "")

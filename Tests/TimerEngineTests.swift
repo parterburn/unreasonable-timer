@@ -459,6 +459,17 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(sizes.isStandard)
     }
 
+    func testSizeStepsLandOnTens() {
+        XCTAssertEqual(TimerSizes.stepped(100, by: 1), 110)
+        XCTAssertEqual(TimerSizes.stepped(100, by: -1), 90)
+        XCTAssertEqual(TimerSizes.stepped(55, by: 1), 60)
+        XCTAssertEqual(TimerSizes.stepped(55, by: -1), 50)
+        XCTAssertEqual(TimerSizes.stepped(200, by: 1), 200)
+        XCTAssertEqual(TimerSizes.stepped(50, by: -1), 50)
+        XCTAssertEqual(TimerSizes.stepped(199, by: 1), 200)
+        XCTAssertEqual(TimerSizes.clamped(7), 50)
+    }
+
     func testSizesRoundTripAndOlderTimersLoadAtStandardSize() throws {
         let config = TimerConfig(seconds: 90, sizes: TimerSizes(timer: 130, lead: 80, done: 150))
         let decoded = try JSONDecoder().decode(TimerConfig.self, from: JSONEncoder().encode(config))

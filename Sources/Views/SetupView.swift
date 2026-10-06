@@ -4,6 +4,42 @@ import TimerCore
 
 private enum SetupField: Hashable {
     case minutes, seconds, done, lead, warning, people
+    case size(SizePart)
+}
+
+/// One of the timer's text sizes (`TimerSizes`).
+private enum SizePart: Hashable {
+    case timer, lead, warning, done, people
+
+    var keyPath: WritableKeyPath<TimerSizes, Int> {
+        switch self {
+        case .timer: return \.timer
+        case .lead: return \.lead
+        case .warning: return \.warning
+        case .done: return \.done
+        case .people: return \.people
+        }
+    }
+
+    /// The moment of the countdown this text appears in; the timer is in all of them.
+    var moment: PreviewMoment? {
+        switch self {
+        case .timer: return nil
+        case .lead: return .start
+        case .warning: return .warning
+        case .done, .people: return .end
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .timer: return "Size of the timer"
+        case .lead: return "Size of the text under the timer"
+        case .warning: return "Size of the text at 15 seconds left"
+        case .done: return "Size of the text at zero"
+        case .people: return "Size of the people waiting line"
+        }
+    }
 }
 
 /// The form's raw text, kept as strings so half-typed values don't fight the user.
@@ -152,6 +188,7 @@ struct SetupView: View {
             case .minutes, .seconds, .lead: previewMoment = .start
             case .warning: previewMoment = .warning
             case .done, .people: previewMoment = .end
+            case .size(let part): if let moment = part.moment { previewMoment = moment }
             case nil: break
             }
         }
@@ -305,9 +342,9 @@ struct SetupView: View {
             }
 
             FormSection("Text") {
-                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: size(\.lead, shows: .start))
-                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: size(\.warning, shows: .warning))
-                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: size(\.done, shows: .end))
+                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: .lead)
+                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: .warning)
+                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: .done)
             } footer: {
                 Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. The percentages set each one’s size. Paste a /timer link into any field to fill in the whole form.")
             }
@@ -325,7 +362,7 @@ struct SetupView: View {
                                 let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
                                 if digits != new { draft.people = digits }
                             }
-                        SizeStepper(title: "Size of the people waiting line", percent: size(\.people, shows: .end))
+                        sizeStepper(.people)
                     }
                 }
             } footer: {
@@ -343,7 +380,7 @@ struct SetupView: View {
                     .fixedSize()
                 }
                 FormRow("Timer size") {
-                    SizeStepper(title: "Size of the timer", percent: $draft.sizes.timer)
+                    sizeStepper(.timer)
                 }
                 FormRow("Accent color") {
                     AccentPicker(hex: $draft.accent, swatchSize: 15)
@@ -385,15 +422,19 @@ struct SetupView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
     }
 
-    /// One of the timer's sizes, for a stepper: changing it shows the moment that text appears
+    /// The size box and arrows for one text. Changing a size shows the moment that text appears
     /// in (loading a timer with other sizes leaves the preview where it is).
-    private func size(_ part: WritableKeyPath<TimerSizes, Int>, shows moment: PreviewMoment) -> Binding<Int> {
-        Binding(
-            get: { draft.sizes[keyPath: part] },
-            set: { newValue in
-                draft.sizes[keyPath: part] = newValue
-                previewMoment = moment
-            }
+    private func sizeStepper(_ part: SizePart) -> some View {
+        SizeStepper(
+            part: part,
+            percent: Binding(
+                get: { draft.sizes[keyPath: part.keyPath] },
+                set: { newValue in
+                    draft.sizes[keyPath: part.keyPath] = newValue
+                    if let moment = part.moment { previewMoment = moment }
+                }
+            ),
+            focus: $focus
         )
     }
 
@@ -477,7 +518,8 @@ struct SetupView: View {
         }
     }
 
-    /// ↑/↓ in the minutes, seconds or people field step its number by one (holding repeats), as
+    /// ↑/↓ in the minutes, seconds or people field step its number by one, and in a size box by
+    /// 10% (holding repeats), as
     /// in a stepper. A text field's editor would take the arrows to move the caret, so a local
     /// monitor sees them first, and only acts while one of those fields is being edited.
     private func installArrowKeys() {
@@ -519,6 +561,11 @@ struct SetupView: View {
             let people = min(max((Int(draft.people) ?? 0) + step, 0), TimerConfig.maxPeople)
             draft.people = people == 0 ? "" : String(people)
             return true
+        case .size(let part):
+            let percent = draft.sizes[keyPath: part.keyPath]
+            draft.sizes[keyPath: part.keyPath] = TimerSizes.stepped(percent, by: step)
+            if let moment = part.moment { previewMoment = moment }
+            return true
         case .done, .lead, .warning:
             return false
         }
@@ -557,7 +604,7 @@ struct SetupView: View {
 
     // MARK: Text
 
-    private func textField(_ label: String, text: Binding<String>, prompt: String, field: SetupField, limit: Int, size: Binding<Int>) -> some View {
+    private func textField(_ label: String, text: Binding<String>, prompt: String, field: SetupField, limit: Int, size: SizePart) -> some View {
         FormRow(label) {
             HStack(spacing: 10) {
                 TextField(label, text: text, prompt: Text(prompt))
@@ -575,7 +622,7 @@ struct SetupView: View {
                             text.wrappedValue = String(new.prefix(limit))
                         }
                     }
-                SizeStepper(title: "Size of the text \(label.lowercased())", percent: size)
+                sizeStepper(size)
             }
         }
     }
@@ -674,36 +721,81 @@ private struct SidebarRow: View {
     }
 }
 
-/// A text size as a percentage, with arrows that step it by 10%. Grey at 100%, so a changed
+/// A text size as a percentage you can type into, with arrows that step it by 10% (as do ↑/↓
+/// while typing; see `SetupView.installArrowKeys`). Sizes within range apply as they're typed;
+/// Return or leaving the box holds anything else to the range. Grey at 100%, so a changed
 /// size stands out.
 private struct SizeStepper: View {
-    let title: String
+    let part: SizePart
     @Binding var percent: Int
+    let focus: FocusState<SetupField?>.Binding
+
+    @State private var text: String
+
+    init(part: SizePart, percent: Binding<Int>, focus: FocusState<SetupField?>.Binding) {
+        self.part = part
+        _percent = percent
+        self.focus = focus
+        _text = State(initialValue: String(percent.wrappedValue))
+    }
+
+    private var isEditing: Bool { focus.wrappedValue == .size(part) }
 
     var body: some View {
         HStack(spacing: 4) {
-            Text("\(percent)%")
-                .monospacedDigit()
-                .foregroundStyle(percent == 100 ? .secondary : .primary)
-                .frame(minWidth: 42, alignment: .trailing)
-            Stepper(title, value: $percent, in: TimerSizes.range, step: TimerSizes.step)
-                .labelsHidden()
+            HStack(spacing: 1) {
+                TextField(part.title, text: $text, prompt: Text("100"))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                    .frame(width: 28)
+                    .focused(focus, equals: .size(part))
+                    .onSubmit(commit)
+                    .onChange(of: text) { _, new in
+                        let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(3))
+                        if digits != new {
+                            text = digits
+                        } else if let value = Int(digits), TimerSizes.range.contains(value), value != percent {
+                            percent = value
+                        }
+                    }
+                Text("%")
+            }
+            .foregroundStyle(percent == 100 && !isEditing ? .secondary : .primary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(HierarchicalShapeStyle.quaternary.opacity(0.6)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(isEditing ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear), lineWidth: 1.5)
+            )
+
+            Stepper(
+                part.title,
+                onIncrement: { percent = TimerSizes.stepped(percent, by: 1) },
+                onDecrement: { percent = TimerSizes.stepped(percent, by: -1) }
+            )
+            .labelsHidden()
         }
-        .help("\(title): \(percent)% of the usual size")
+        .help("\(part.title): \(percent)% of the usual size. Type a size from 50 to 200, or use the arrows or ↑/↓.")
         .contextMenu {
             Button("Reset to 100%") { percent = 100 }
                 .disabled(percent == 100)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityValue("\(percent) percent")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: percent = min(percent + TimerSizes.step, TimerSizes.range.upperBound)
-            case .decrement: percent = max(percent - TimerSizes.step, TimerSizes.range.lowerBound)
-            @unknown default: break
-            }
+        .onChange(of: percent) { _, new in
+            if Int(text) != new { text = String(new) }
         }
+        .onChange(of: isEditing) { _, editing in
+            if !editing { commit() }
+        }
+    }
+
+    /// Holds what was typed to the range (or puts back the size, if nothing was).
+    private func commit() {
+        let value = Int(text).map(TimerSizes.clamped) ?? percent
+        if value != percent { percent = value }
+        text = String(value)
     }
 }
 

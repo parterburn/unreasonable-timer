@@ -9,7 +9,9 @@ import CoreGraphics
 import Foundation
 
 let codes: [String: CGKeyCode] = [
-    "up": 126, "down": 125, "equals": 24, "minus": 27, "zero": 29, "escape": 53, "t": 17, "w": 13,
+    "up": 126, "down": 125, "equals": 24, "minus": 27, "zero": 29, "escape": 53, "return": 36,
+    "a": 0, "t": 17, "w": 13,
+    "0": 29, "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26, "8": 28, "9": 25,
 ]
 let modifierKeys: [String: (code: CGKeyCode, flag: CGEventFlags)] = [
     "ctrl": (59, .maskControl), "opt": (58, .maskAlternate), "shift": (56, .maskShift), "cmd": (55, .maskCommand),
