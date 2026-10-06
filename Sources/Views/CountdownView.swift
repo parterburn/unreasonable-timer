@@ -65,7 +65,9 @@ struct CountdownView: View {
             idleTask?.cancel()
             controller.setWindowChromeVisible(true)
         }
-        .preferredColorScheme(config.theme == .light ? .light : .dark)
+        // The timer's theme applies to its own drawing only. preferredColorScheme would set the
+        // whole window's appearance, and it sticks after going back to the setup screen.
+        .environment(\.colorScheme, config.theme == .light ? .light : .dark)
     }
 
     // MARK: Keys

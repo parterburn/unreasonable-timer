@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
@@ -192,6 +193,23 @@ struct SettingsView: View {
                             .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(.tertiary, lineWidth: 0.5))
                     }
                 }
+            }
+        }
+    }
+}
+
+/// The window SwiftUI makes for the Settings scene.
+enum SettingsWindow {
+    /// Raises Settings above other apps' windows once it exists (opening it is asynchronous).
+    @MainActor
+    static func bringToFront() {
+        Task { @MainActor in
+            for _ in 0..<10 {
+                if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }) {
+                    window.makeKeyAndOrderFront(nil)
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
             }
         }
     }
