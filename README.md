@@ -8,9 +8,11 @@ Requires macOS 14 (Sonoma) or later.
 
 ## Using it
 
-The setup form matches the web form: minutes and seconds, the text for zero, the text under
-the timer, the text at 15 seconds left, people in the room, keep counting after zero, and a
-light or dark theme. **Start Timer** opens the countdown paused, as the web page does.
+The setup screen is laid out like System Settings: saved and recent timers in the sidebar, and
+the timer's options in a grouped form (the same ones as the web form) under a live preview of
+the countdown. Pick a duration with the fields or the 1–60 minute buttons. **Start Timer** (or
+Return) opens the countdown paused, as the web page does; double-click a timer in the sidebar to
+open it straight away. The countdown keeps the web page's look.
 
 | Key | Action |
 | --- | --- |
@@ -27,9 +29,10 @@ Move the mouse to show the hint line; it and the cursor hide after 2.5 seconds o
 
 ### Saved timers
 
-Use **Save as named timer…** under the Start button. Saved timers appear in the setup form,
-the menu bar menu, the Dock menu and the Timer menu, where the first nine get ⌘1 to ⌘9. The
-five most recent runs are kept under **Previous timers**, newest first, without repeats.
+Use **Save as Timer…** at the bottom of the setup screen. Saved timers appear in its sidebar,
+the menu bar menu, the Dock menu and the Timer menu, where the first nine get ⌘1 to ⌘9. Select
+one to edit it, then **Update** to keep the change; right-click to start or delete it. The five
+most recent runs are kept under **Recent**, newest first, without repeats.
 Timers started from the menu bar, Dock, hotkeys, Shortcuts or a link start running immediately;
 timers opened from the setup form start paused.
 

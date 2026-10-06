@@ -54,8 +54,9 @@ launch() { # [extra launch arguments...]
   sleep 6
 }
 
+# The setup screen follows the system appearance (light on the runner by default).
 launch
-capture setup-dark
+capture setup-1-light
 
 open "untimer://open?time=20&lead=$LEAD&people=12"
 sleep 3
@@ -101,34 +102,23 @@ sleep 0.2; capture zoom-2-largest
 "$HOLD_KEY_TOOL" zero 0 cmd
 sleep 2;  capture zoom-3-actual-size
 
-open "untimer://edit?time=600&theme=light"
-sleep 3;  capture setup-light
+# The timer's own theme only changes the preview at the top of the form.
+open "untimer://edit?time=600&theme=light&lead=Intro:%20our%20first%20speaker"
+sleep 3;  capture setup-2-light-with-light-timer
 
-# Further down the form: relaunch scrolled to the controls (toggle, theme, accent, Start)
-# and to the bottom (history).
-# The form reopens with the last timer's theme (light, from above), so switch back to dark first.
-launch -UTSetupScroll controls
-open "untimer://edit?time=600"
-sleep 3;  capture setup-dark-controls
-open "untimer://edit?time=600&theme=light"
-sleep 3;  capture setup-light-controls
-
-launch -UTSetupScroll bottom
-open "untimer://edit?time=600"
-sleep 3;  capture setup-dark-bottom
-open "untimer://edit?time=600&theme=light"
-sleep 3;  capture setup-light-bottom
+# Dark system appearance.
+launch -AppleInterfaceStyle Dark
+capture setup-3-dark
 
 # Another accent (orange), set through the argument domain the way a saved choice would be.
-launch -UTSetupScroll controls -accentColor "#E8743B"
-open "untimer://edit?time=600"
-sleep 3;  capture accent-setup-dark
+launch -AppleInterfaceStyle Dark -accentColor "#E8743B"
+capture accent-setup-dark
 open "untimer://start?time=20&lead=$LEAD&people=12"
 sleep 3;  capture accent-countdown-running
 sleep 11; capture accent-countdown-final     # ~5 left
 sleep 15; capture accent-countdown-overtime  # ~+11
-open "untimer://edit?time=600&theme=light"
-sleep 3;  capture accent-setup-light
+launch -accentColor "#E8743B"
+capture accent-setup-light
 
 # Settings, in front of the main window. The whole screen, since the main window is larger.
 capture_screen() { # <name>

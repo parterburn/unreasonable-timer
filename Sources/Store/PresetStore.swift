@@ -61,6 +61,13 @@ final class PresetStore: ObservableObject {
         return preset
     }
 
+    /// Replaces a saved timer's settings, keeping its name and place in the list.
+    func update(_ preset: NamedPreset, config: TimerConfig) {
+        guard let index = presets.firstIndex(where: { $0.id == preset.id }) else { return }
+        presets[index].config = config
+        persist()
+    }
+
     func delete(_ preset: NamedPreset) {
         presets.removeAll { $0.id == preset.id }
         persist()
