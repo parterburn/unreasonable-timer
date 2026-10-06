@@ -33,7 +33,7 @@ jobs:
   release:
     name: Build, notarize and publish
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 150   # Apple's notary has taken over 40 minutes per submission, and there are two
     environment: release
     env:
       RELEASE_REPO: unreasonable/timer
