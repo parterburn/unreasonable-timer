@@ -322,7 +322,10 @@ struct SetupView: View {
 
     private func timeField(text: Binding<String>, field: SetupField, maxDigits: Int, unit: String) -> some View {
         VStack(spacing: 4) {
-            TextField("00", text: text)
+            // In a grouped Form a text field's title becomes a label beside it; the unit
+            // caption below does that job here.
+            TextField(unit, text: text, prompt: Text("00"))
+                .labelsHidden()
                 .textFieldStyle(.plain)
                 .font(.system(size: 40, weight: .light, design: .rounded))
                 .monospacedDigit()

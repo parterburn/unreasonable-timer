@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TimerCore
 
@@ -67,6 +68,9 @@ struct RootView: View {
             controller.openMainWindow = { openWindow(id: "main") }
             // For scripted screenshots (scripts/ci-screenshots.sh).
             if UserDefaults.standard.bool(forKey: "UTOpenSettings") { openSettings() }
+            if UserDefaults.standard.string(forKey: "UTAppearance") == "dark" {
+                NSApp.appearance = NSAppearance(named: .darkAqua)
+            }
         }
     }
 }

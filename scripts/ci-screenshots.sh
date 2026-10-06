@@ -111,12 +111,12 @@ open "untimer://edit?time=600&theme=light&lead=Intro:%20our%20first%20speaker"
 sleep 3;  capture setup-2-light-with-light-timer
 
 # Dark system appearance.
-launch -AppleInterfaceStyle Dark
+launch -UTAppearance dark
 capture setup-3-dark
 
 # Another accent (Eco Purple) with the singing bowl: both belong to the timer, so a link sets them.
 ORANGE="accent=6926E3&sound=singing-bowl&chime15=1"
-launch -AppleInterfaceStyle Dark
+launch -UTAppearance dark
 open "untimer://edit?time=600&$ORANGE"
 sleep 3;  capture accent-setup-dark
 open "untimer://start?time=20&lead=$LEAD&people=12&$ORANGE"
