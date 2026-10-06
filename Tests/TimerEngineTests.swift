@@ -423,6 +423,33 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.countOver)
         XCTAssertNil(config.people)
         XCTAssertEqual(config.theme, .dark)
+        XCTAssertNil(config.accent)
+        XCTAssertEqual(config.sound, .classic)
+        XCTAssertFalse(config.chimeAtWarning)
+    }
+
+    func testAccentIsNormalised() {
+        XCTAssertEqual(TimerConfig(seconds: 60, accent: "e8743b").accent, "#E8743B")
+        XCTAssertEqual(TimerConfig(seconds: 60, accent: "#E8743B").accent, "#E8743B")
+        // The default teal and anything that isn't a colour both mean "default".
+        XCTAssertNil(TimerConfig(seconds: 60, accent: "#41b8c2").accent)
+        XCTAssertNil(TimerConfig(seconds: 60, accent: "orange").accent)
+    }
+
+    func testTimersSavedBeforeAccentAndSoundStillLoad() throws {
+        let json = #"{"seconds": 300, "warningText": "Wrap up", "doneText": "Stop", "countOver": false, "theme": "light"}"#
+        let config = try JSONDecoder().decode(TimerConfig.self, from: Data(json.utf8))
+        XCTAssertEqual(config.seconds, 300)
+        XCTAssertNil(config.accent)
+        XCTAssertEqual(config.sound, .classic)
+        XCTAssertFalse(config.chimeAtWarning)
+    }
+
+    func testAccentAndSoundRoundTrip() throws {
+        let config = TimerConfig(seconds: 90, accent: "#8E5CD6", sound: .singingBowl, chimeAtWarning: true)
+        let decoded = try JSONDecoder().decode(TimerConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded, config)
+        XCTAssertTrue(config.summary.hasSuffix("Singing bowl"))
     }
 
     func testClamping() {
@@ -541,6 +568,19 @@ final class LinkParsingTests: XCTestCase {
     func testCustomSchemeLink() {
         XCTAssertEqual(TimerConfig(link: "untimer://start?time=60")?.seconds, 60)
         XCTAssertEqual(TimerConfig(link: "  untimer://open?time=45\n")?.seconds, 45)
+    }
+
+    func testLinkExtrasForAccentAndSound() throws {
+        let config = try XCTUnwrap(TimerConfig(link: "untimer://start?time=60&accent=E8743B&sound=singing-bowl&chime15=1"))
+        XCTAssertEqual(config.accent, "#E8743B")
+        XCTAssertEqual(config.sound, .singingBowl)
+        XCTAssertTrue(config.chimeAtWarning)
+
+        let plain = try XCTUnwrap(TimerConfig(link: "untimer://start?time=60&sound=kazoo"))
+        XCTAssertNil(plain.accent)
+        XCTAssertEqual(plain.sound, .classic)
+        XCTAssertFalse(plain.chimeAtWarning)
+        XCTAssertEqual(TimerConfig(link: "untimer://start?time=60&sound=none")?.sound, TimerSound.none)
     }
 
     func testTrailingSlashAndCurlyQuotes() throws {

@@ -290,13 +290,12 @@ final class TimerController: ObservableObject {
     private func apply(_ events: [TimerEvent]) {
         clock.record(events)
 
-        let defaults = UserDefaults.standard
         for event in events {
             switch event {
             case .warningEntered:
-                if defaults.bool(forKey: AppSettings.chimeAtWarning) { chimes.play(.warning) }
+                if engine.config.chimeAtWarning { chimes.play(.warning, sound: engine.config.sound) }
             case .zeroReached:
-                if defaults.bool(forKey: AppSettings.chimeAtZero) { chimes.play(.zero) }
+                chimes.play(.zero, sound: engine.config.sound)
                 if !isTimerInFront { notifier.notifyDone(engine.config.doneText) }
             case .finalTick:
                 break
@@ -331,7 +330,7 @@ final class TimerController: ObservableObject {
                 progress: snapshot.progress,
                 expired: snapshot.isExpired,
                 overtime: snapshot.isOvertime,
-                accent: AccentColor.current
+                accent: AccentColor(config: engine.config)
             )
         })
     }

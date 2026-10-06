@@ -15,6 +15,10 @@ private struct Draft: Equatable {
     var people: String
     var countOver: Bool
     var theme: TimerThemeMode
+    /// "#RRGGBB"
+    var accent: String
+    var sound: TimerSound
+    var chimeAtWarning: Bool
 
     init(config: TimerConfig) {
         minutes = String(format: "%02d", config.seconds / 60)
@@ -25,6 +29,9 @@ private struct Draft: Equatable {
         people = config.people.map { String($0) } ?? ""
         countOver = config.countOver
         theme = config.theme
+        accent = config.accent ?? TimerConfig.defaultAccent
+        sound = config.sound
+        chimeAtWarning = config.chimeAtWarning
     }
 
     var totalSeconds: Int { (Int(minutes) ?? 0) * 60 + (Int(seconds) ?? 0) }
@@ -39,7 +46,10 @@ private struct Draft: Equatable {
             doneText: done,
             countOver: countOver,
             people: Int(people),
-            theme: theme
+            theme: theme,
+            accent: accent,
+            sound: sound,
+            chimeAtWarning: chimeAtWarning
         )
     }
 }
@@ -63,7 +73,7 @@ struct SetupView: View {
     @State private var showSaveAlert = false
     @State private var saveName = ""
     @FocusState private var focus: SetupField?
-    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
+    @ObservedObject private var chimes = ChimePlayer.shared
 
     private static let quickMinutes = [1, 3, 5, 10, 15, 30, 60]
 
@@ -73,7 +83,7 @@ struct SetupView: View {
         _draft = State(initialValue: Draft(config: controller.formPrefill ?? controller.config))
     }
 
-    private var accent: AccentColor { AccentColor(string: accentHex) ?? .teal }
+    private var accent: AccentColor { AccentColor(string: draft.accent) ?? .teal }
 
     private var selectedPreset: NamedPreset? {
         guard case .saved(let id) = selection else { return nil }
@@ -102,7 +112,8 @@ struct SetupView: View {
         .onChange(of: focus) { old, _ in
             if old == .minutes || old == .seconds { normalizeTime() }
         }
-        .onChange(of: accentHex) { controller.settingsChanged() }
+        .onChange(of: draft.sound) { chimes.stop() }
+        .onDisappear { chimes.stop() }
         .alert("Name this timer", isPresented: $showSaveAlert) {
             TextField("Name", text: $saveName)
             Button("Save") { saveCurrent() }
@@ -240,12 +251,38 @@ struct SetupView: View {
                 }
                 .pickerStyle(.segmented)
                 LabeledContent("Accent color") {
-                    AccentPicker(hex: $accentHex, swatchSize: 15)
+                    AccentPicker(hex: $draft.accent, swatchSize: 15)
                 }
             } header: {
                 Text("Look")
+            }
+
+            Section {
+                LabeledContent {
+                    Picker("Sound", selection: $draft.sound) {
+                        ForEach(TimerSound.allCases, id: \.self) { sound in
+                            Text(sound.title).tag(sound)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Sound at zero")
+                        previewButton(.zero, label: "the chime at zero")
+                    }
+                }
+                Toggle(isOn: $draft.chimeAtWarning) {
+                    HStack(spacing: 6) {
+                        Text("Also chime at 15 seconds left")
+                        previewButton(.warning, label: "the chime at 15 seconds")
+                    }
+                }
+                .disabled(draft.sound == .none)
+            } header: {
+                Text("Sound")
             } footer: {
-                Text("The theme belongs to this timer. The accent color applies to every timer, and is also in Settings.")
+                Text(soundFootnote)
             }
         }
         .formStyle(.grouped)
@@ -313,6 +350,30 @@ struct SetupView: View {
         let total = min(draft.totalSeconds, TimerConfig.maxSeconds)
         draft.minutes = String(format: "%02d", total / 60)
         draft.seconds = String(format: "%02d", total % 60)
+    }
+
+    // MARK: Sound
+
+    private var soundFootnote: String {
+        let bowl = draft.sound == .singingBowl
+            ? "The singing bowl rings three times at zero, about ten seconds apart. " : ""
+        return bowl + "A notification also appears at zero when the timer isn't in front."
+    }
+
+    /// Plays this timer's chime (or stops it), to hear the choice before starting.
+    private func previewButton(_ moment: ChimePlayer.Moment, label: String) -> some View {
+        let playing = chimes.previewing == moment
+        return Button {
+            chimes.togglePreview(moment, sound: draft.sound)
+        } label: {
+            Image(systemName: playing ? "stop.circle.fill" : "play.circle")
+                .imageScale(.large)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.borderless)
+        .disabled(draft.sound == .none)
+        .help(playing ? "Stop" : "Play \(label)")
+        .accessibilityLabel(playing ? "Stop" : "Play \(label)")
     }
 
     // MARK: Text

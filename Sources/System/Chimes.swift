@@ -1,32 +1,19 @@
 import AppKit
 import AVFoundation
+import TimerCore
 
-/// The sound set for the two chimes (15 seconds left, and zero).
-enum ChimeSound: String, CaseIterable, Identifiable {
-    /// macOS's Tink and Glass.
-    case classic
-    /// A small bowl at 15 seconds; at zero a deep bowl struck three times, about ten seconds
-    /// apart, so it rings the room back to attention the way a meditation bowl does.
-    case singingBowl
-    /// A soft two-note "ding-dong", then a rising C–E–G–C played twice.
-    case marimba
-
-    var id: String { rawValue }
-
+extension TimerSound {
     var title: String {
         switch self {
+        case .none: return "None"
         case .classic: return "Classic"
         case .singingBowl: return "Singing bowl"
         case .marimba: return "Marimba"
         }
     }
-
-    static var current: ChimeSound {
-        ChimeSound(rawValue: UserDefaults.standard.string(forKey: AppSettings.chimeSound) ?? "") ?? .classic
-    }
 }
 
-/// Plays the chimes, for a running timer and for the previews in Settings.
+/// Plays a timer's chimes, and the previews on the setup screen.
 @MainActor
 final class ChimePlayer: ObservableObject {
     enum Moment {
@@ -45,13 +32,13 @@ final class ChimePlayer: ObservableObject {
     private var playingZeroForTimer = false
     private var finishTask: Task<Void, Never>?
 
-    func play(_ moment: Moment, sound: ChimeSound = .current) {
+    func play(_ moment: Moment, sound: TimerSound) {
         start(moment, sound: sound)
         playingZeroForTimer = moment == .zero
     }
 
     /// Plays `moment` in `sound`, or stops it if that preview is already playing.
-    func togglePreview(_ moment: Moment, sound: ChimeSound = .current) {
+    func togglePreview(_ moment: Moment, sound: TimerSound) {
         if previewing == moment {
             stop()
             return
@@ -82,17 +69,20 @@ final class ChimePlayer: ObservableObject {
         previewing = nil
     }
 
-    private func start(_ moment: Moment, sound: ChimeSound) {
+    private func start(_ moment: Moment, sound: TimerSound) {
         stop()
         let duration: TimeInterval
         switch sound {
+        case .none:
+            return
         case .classic:
             let chime = NSSound(named: NSSound.Name(moment == .warning ? "Tink" : "Glass"))
             chime?.play()
             systemSound = chime
             duration = chime?.duration ?? 1
         case .singingBowl, .marimba:
-            let name = (sound == .singingBowl ? "singing-bowl-" : "marimba-") + (moment == .warning ? "warning" : "zero")
+            // Resources/Sounds/<sound>-warning.m4a and <sound>-zero.m4a, from scripts/make-sounds.py.
+            let name = "\(sound.rawValue)-\(moment == .warning ? "warning" : "zero")"
             guard let url = Bundle.main.url(forResource: name, withExtension: "m4a"),
                   let player = try? AVAudioPlayer(contentsOf: url)
             else { return }

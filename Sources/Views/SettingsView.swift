@@ -9,12 +9,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.keepAwake) private var keepAwake = true
     @AppStorage(AppSettings.floatOnTop) private var floatOnTop = false
     @AppStorage(AppSettings.showMenuBarItem) private var showMenuBarItem = true
-    @AppStorage(AppSettings.chimeAtWarning) private var chimeAtWarning = false
-    @AppStorage(AppSettings.chimeAtZero) private var chimeAtZero = true
     @AppStorage(AppSettings.presentDisplay) private var presentDisplay = 0
-    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
-    @AppStorage(AppSettings.chimeSound) private var chimeSound = ChimeSound.classic.rawValue
-    @ObservedObject private var chimes = ChimePlayer.shared
 
     /// Toggled to make the "Open at login" row re-read `SMAppService`'s status.
     @State private var loginRefresh = false
@@ -33,7 +28,6 @@ struct SettingsView: View {
         }
         .frame(width: 500)
         .scenePadding()
-        .tint((AccentColor(string: accentHex) ?? .teal).color)
     }
 
     /// The last line of each tab, under its final group.
@@ -49,14 +43,7 @@ struct SettingsView: View {
 
     private var general: some View {
         Form {
-            Section("Appearance") {
-                LabeledContent("Accent color") {
-                    AccentPicker(hex: $accentHex, swatchSize: 15)
-                }
-                .onChange(of: accentHex) { controller.settingsChanged() }
-            }
-
-            Section("Timer") {
+            Section {
                 Toggle("Keep the display awake while a timer runs", isOn: $keepAwake)
                     .onChange(of: keepAwake) { controller.settingsChanged() }
                 Toggle("Keep the timer above other windows", isOn: $floatOnTop)
@@ -67,20 +54,10 @@ struct SettingsView: View {
                         Text(display.name).tag(display.id)
                     }
                 }
-            }
-
-            Section("Sounds") {
-                Picker("Sound", selection: $chimeSound) {
-                    ForEach(ChimeSound.allCases) { sound in
-                        Text(sound.title).tag(sound.rawValue)
-                    }
-                }
-                .onChange(of: chimeSound) { chimes.stop() }
-                chimeRow("Chime at 15 seconds left", isOn: $chimeAtWarning, moment: .warning)
-                chimeRow("Chime at zero", isOn: $chimeAtZero, moment: .zero)
-                Text(chimeFootnote)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Timer")
+            } footer: {
+                Text("Each timer has its own sound, accent color and theme. Set them on the setup screen.")
             }
 
             Section("App") {
@@ -116,7 +93,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onDisappear { chimes.stop() }
     }
 
     /// "Version 1.2.0 (3)"
@@ -125,32 +101,6 @@ struct SettingsView: View {
         let version = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String ?? "?"
         return "Version \(version) (\(build))"
-    }
-
-    private var chimeFootnote: String {
-        let bowl = chimeSound == ChimeSound.singingBowl.rawValue
-            ? "The singing bowl rings three times at zero, about ten seconds apart. " : ""
-        return bowl + "A notification also appears at zero when the timer isn't in front."
-    }
-
-    /// A chime toggle with a play/stop button to hear it.
-    private func chimeRow(_ title: String, isOn: Binding<Bool>, moment: ChimePlayer.Moment) -> some View {
-        let playing = chimes.previewing == moment
-        return Toggle(isOn: isOn) {
-            HStack(spacing: 6) {
-                Text(title)
-                Button {
-                    chimes.togglePreview(moment, sound: ChimeSound(rawValue: chimeSound) ?? .classic)
-                } label: {
-                    Image(systemName: playing ? "stop.circle.fill" : "play.circle")
-                        .imageScale(.large)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(.borderless)
-                .help(playing ? "Stop" : "Preview")
-                .accessibilityLabel(playing ? "Stop preview" : "Preview \(title.lowercased())")
-            }
-        }
     }
 
     /// Backed by the system's login-item state rather than a stored flag, so it stays right if

@@ -5,6 +5,16 @@ public enum TimerThemeMode: String, Codable, CaseIterable, Sendable {
     case light
 }
 
+/// The chime a timer plays at zero (and at 15 seconds left, if it asks for that). The web page
+/// is silent, so these only come from the Mac app and its links.
+public enum TimerSound: String, Codable, CaseIterable, Sendable {
+    case none
+    /// macOS's Glass (and Tink at 15 seconds).
+    case classic
+    case singingBowl = "singing-bowl"
+    case marimba
+}
+
 /// Everything that defines one timer. Mirrors the params of the web `/timer` page
 /// (`StaticController#timer`), including its limits and defaults.
 public struct TimerConfig: Codable, Hashable, Sendable {
@@ -17,6 +27,8 @@ public struct TimerConfig: Codable, Hashable, Sendable {
     public static let defaultDoneText = "Time is up!"
     /// What the setup form shows before anything has been chosen.
     public static let defaultSeconds = 600
+    /// The web page's teal; `accent` is nil for it.
+    public static let defaultAccent = "#41B8C2"
 
     /// 1...86_400
     public var seconds: Int
@@ -30,6 +42,11 @@ public struct TimerConfig: Codable, Hashable, Sendable {
     /// Room size for the "N people waiting" cost line.
     public var people: Int?
     public var theme: TimerThemeMode
+    /// "#RRGGBB" the countdown is drawn in, or nil for the default teal.
+    public var accent: String?
+    public var sound: TimerSound
+    /// Also chime at 15 seconds left (zero always chimes unless `sound` is `.none`).
+    public var chimeAtWarning: Bool
 
     public init(
         seconds: Int,
@@ -38,7 +55,10 @@ public struct TimerConfig: Codable, Hashable, Sendable {
         doneText: String = TimerConfig.defaultDoneText,
         countOver: Bool = true,
         people: Int? = nil,
-        theme: TimerThemeMode = .dark
+        theme: TimerThemeMode = .dark,
+        accent: String? = nil,
+        sound: TimerSound = .classic,
+        chimeAtWarning: Bool = false
     ) {
         self.seconds = min(max(seconds, 1), TimerConfig.maxSeconds)
 
@@ -59,10 +79,22 @@ public struct TimerConfig: Codable, Hashable, Sendable {
         }
 
         self.theme = theme
+        self.accent = TimerConfig.normalizedAccent(accent)
+        self.sound = sound
+        self.chimeAtWarning = chimeAtWarning
+    }
+
+    /// "#RRGGBB" in capitals from "#rrggbb" or "rrggbb"; nil for the default teal or anything else.
+    static func normalizedAccent(_ value: String?) -> String? {
+        guard let value = value else { return nil }
+        let digits = value.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "#", with: "").uppercased()
+        guard digits.count == 6, digits.allSatisfy({ $0.isHexDigit }) else { return nil }
+        let hex = "#" + digits
+        return hex == TimerConfig.defaultAccent ? nil : hex
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seconds, leadText, warningText, doneText, countOver, people, theme
+        case seconds, leadText, warningText, doneText, countOver, people, theme, accent, sound, chimeAtWarning
     }
 
     /// Tolerant decoding so presets saved by older versions keep loading.
@@ -75,7 +107,10 @@ public struct TimerConfig: Codable, Hashable, Sendable {
             doneText: try c.decodeIfPresent(String.self, forKey: .doneText) ?? TimerConfig.defaultDoneText,
             countOver: try c.decodeIfPresent(Bool.self, forKey: .countOver) ?? true,
             people: try c.decodeIfPresent(Int.self, forKey: .people),
-            theme: try c.decodeIfPresent(TimerThemeMode.self, forKey: .theme) ?? .dark
+            theme: try c.decodeIfPresent(TimerThemeMode.self, forKey: .theme) ?? .dark,
+            accent: try c.decodeIfPresent(String.self, forKey: .accent),
+            sound: (try? c.decodeIfPresent(TimerSound.self, forKey: .sound)) ?? .classic,
+            chimeAtWarning: try c.decodeIfPresent(Bool.self, forKey: .chimeAtWarning) ?? false
         )
     }
 
@@ -110,6 +145,12 @@ extension TimerConfig {
         if theme == .light {
             parts.append("Light mode")
         }
+        switch sound {
+        case .none: parts.append("Silent")
+        case .singingBowl: parts.append("Singing bowl")
+        case .marimba: parts.append("Marimba")
+        case .classic: break
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -136,7 +177,11 @@ extension TimerConfig {
             doneText: params["done"] ?? "",
             countOver: params["over"] != "0",
             people: people > 0 ? people : nil,
-            theme: params["theme"] == "light" ? .light : .dark
+            theme: params["theme"] == "light" ? .light : .dark,
+            // Mac-only extras, ignored by the web page: accent=E8743B, sound=singing-bowl, chime15=1.
+            accent: params["accent"],
+            sound: params["sound"].flatMap { TimerSound(rawValue: $0.lowercased()) } ?? .classic,
+            chimeAtWarning: params["chime15"] == "1"
         )
     }
 

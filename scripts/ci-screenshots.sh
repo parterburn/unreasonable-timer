@@ -110,15 +110,18 @@ sleep 3;  capture setup-2-light-with-light-timer
 launch -AppleInterfaceStyle Dark
 capture setup-3-dark
 
-# Another accent (orange), set through the argument domain the way a saved choice would be.
-launch -AppleInterfaceStyle Dark -accentColor "#E8743B"
-capture accent-setup-dark
-open "untimer://start?time=20&lead=$LEAD&people=12"
+# Another accent (orange) with the singing bowl: both belong to the timer, so a link sets them.
+ORANGE="accent=E8743B&sound=singing-bowl&chime15=1"
+launch -AppleInterfaceStyle Dark
+open "untimer://edit?time=600&$ORANGE"
+sleep 3;  capture accent-setup-dark
+open "untimer://start?time=20&lead=$LEAD&people=12&$ORANGE"
 sleep 3;  capture accent-countdown-running
 sleep 11; capture accent-countdown-final     # ~5 left
 sleep 15; capture accent-countdown-overtime  # ~+11
-launch -accentColor "#E8743B"
-capture accent-setup-light
+launch
+open "untimer://edit?time=600&$ORANGE"
+sleep 3;  capture accent-setup-light
 
 # Settings, in front of the main window. The whole screen, since the main window is larger.
 capture_screen() { # <name>

@@ -45,7 +45,6 @@ struct RootView: View {
     @ObservedObject var controller: TimerController
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
-    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
 
     var body: some View {
         ZStack {
@@ -61,7 +60,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: controller.screen)
         .frame(minWidth: 480, minHeight: 360)
         // SwiftUI's standard controls pick up the accent too.
-        .tint((AccentColor(string: accentHex) ?? .teal).color)
+        .tint(AccentColor(config: controller.config).color)
         .background(WindowAccessor { controller.attach(window: $0) })
         .onOpenURL { controller.handle(url: $0) }
         .onAppear {

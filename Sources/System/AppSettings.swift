@@ -6,14 +6,8 @@ enum AppSettings {
     static let keepAwake = "keepDisplayAwake"
     static let floatOnTop = "floatOnTop"
     static let showMenuBarItem = "showMenuBarItem"
-    static let chimeAtWarning = "chimeAtWarning"
-    static let chimeAtZero = "chimeAtZero"
     /// `CGDirectDisplayID` of the display to present on, or 0 for "wherever the window is".
     static let presentDisplay = "presentDisplayID"
-    /// "#RRGGBB"; every accent shade in the interface derives from it (see `AccentColor`).
-    static let accentColor = "accentColor"
-    /// A `ChimeSound` raw value.
-    static let chimeSound = "chimeSound"
     /// The countdown's ⌘+/⌘- zoom (1 = the web page's sizes).
     static let countdownZoom = "countdownZoom"
 
@@ -22,11 +16,7 @@ enum AppSettings {
             keepAwake: true,
             floatOnTop: false,
             showMenuBarItem: true,
-            chimeAtWarning: false,
-            chimeAtZero: true,
             presentDisplay: 0,
-            accentColor: "#41B8C2",
-            chimeSound: ChimeSound.classic.rawValue,
             countdownZoom: 1.0,
         ])
     }

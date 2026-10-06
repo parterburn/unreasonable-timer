@@ -18,12 +18,11 @@ struct CountdownView: View {
     @State private var zoomLabelTask: Task<Void, Never>?
     /// Where the pointer is along the progress bar, while it is over it.
     @State private var barHoverX: CGFloat?
-    @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
     @AppStorage(AppSettings.countdownZoom) private var zoom = 1.0
 
     private var snap: TimerEngine.Snapshot { clock.snapshot }
     private var config: TimerConfig { controller.config }
-    private var palette: Palette { Palette.make(config.theme, accent: AccentColor(string: accentHex) ?? .teal) }
+    private var palette: Palette { Palette.make(config.theme, accent: AccentColor(config: config)) }
     /// The lead text gives way to the warning text from 15 seconds on, and stays gone.
     private var showsWarning: Bool { snap.isWarning || snap.isExpired }
     private var hintVisible: Bool { (hoveringStage || hoveringHint) && !isIdle }

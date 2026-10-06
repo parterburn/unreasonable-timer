@@ -9,8 +9,10 @@ Requires macOS 14 (Sonoma) or later.
 ## Using it
 
 The setup screen is laid out like System Settings: saved and recent timers in the sidebar, and
-the timer's options in a grouped form (the same ones as the web form) under a live preview of
-the countdown. Pick a duration with the fields or the 1–60 minute buttons. **Start Timer** (or
+the timer's options in a grouped form under a live preview of the countdown: the web form's
+options, plus each timer's accent color and sound (None, Classic, Singing bowl or Marimba, with
+buttons to hear them; the singing bowl rings three times at zero). The sounds are made by
+`scripts/make-sounds.py`. Pick a duration with the fields or the 1–60 minute buttons. **Start Timer** (or
 Return) opens the countdown paused, as the web page does; double-click a timer in the sidebar to
 open it straight away. The countdown keeps the web page's look.
 
@@ -51,6 +53,8 @@ untimer://open?time=300        # opens paused
 
 `time` is in seconds (1 to 86,400). `text` is the text at 15 seconds left (an empty `text=`
 means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` selects light mode.
+The Mac app also reads `accent=E8743B` (accent color), `sound=none|classic|singing-bowl|marimba`
+and `chime15=1` (also chime at 15 seconds left); the web page ignores them.
 
 ### Shortcuts, Spotlight and global hotkeys
 
@@ -61,11 +65,9 @@ means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` sele
 
 ### Settings
 
-Accent color (teal by default; also on the setup form), keep the display awake while running
-(on by default), keep the timer above other windows,
-which display to go fullscreen on, chimes at 15 seconds and at zero (Classic, Singing bowl or
-Marimba, each with a preview button; the sounds are made by `scripts/make-sounds.py`), menu bar item, open at
-login, and updates.
+Keep the display awake while running (on by default), keep the timer above other windows,
+which display to go fullscreen on, menu bar item, open at login, and updates. Sound, accent color
+and theme belong to each timer, on the setup screen.
 
 ## Building
 

@@ -138,9 +138,9 @@ struct AccentColor: Hashable {
     /// The accent as it appears on screen (the dark theme's main shade).
     var color: Color { shade(0x41B8C2).color }
 
-    /// The current setting, for code outside SwiftUI views.
-    static var current: AccentColor {
-        AccentColor(string: UserDefaults.standard.string(forKey: AppSettings.accentColor) ?? "") ?? .teal
+    /// A timer's accent (nil in the config means teal).
+    init(config: TimerConfig) {
+        self = AccentColor(string: config.accent ?? "") ?? .teal
     }
 
     /// The web teal shade `tealHex`, translated into this accent.
