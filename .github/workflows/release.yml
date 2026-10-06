@@ -2,10 +2,16 @@ name: Release
 
 # Builds, signs, notarizes and publishes a release with scripts/release.sh, the same script used
 # on a Mac, so releases don't need anyone's laptop. Bump MARKETING_VERSION and
-# CURRENT_PROJECT_VERSION in project.yml first (and add release-notes/<version>.md), then run
-# this from the Actions tab. It refuses to run for a version that is already published.
+# CURRENT_PROJECT_VERSION in project.yml first (and add release-notes/<version>.md), merge that
+# into unreasonable/timer, then run this from the Actions tab. It refuses to run for a version
+# that is already published, or for a commit that isn't on unreasonable/timer's main.
+#
+# It runs in the fork that holds the signing secrets (parterburn/unreasonable-timer) and
+# publishes to unreasonable/timer's Releases, where installed apps and the Eco download link look.
 #
 # Secrets live in the "release" environment, limited to the main branch (see README):
+#   UPSTREAM_RELEASE_TOKEN                        token with Contents read/write on
+#                                                 unreasonable/timer (not needed when run there)
 #   DEVELOPER_ID_P12, DEVELOPER_ID_P12_PASSWORD   Developer ID Application certificate (.p12, base64)
 #   NOTARY_KEY, NOTARY_KEY_ID, NOTARY_ISSUER_ID   App Store Connect API key for notarytool
 #     or NOTARY_APPLE_ID, NOTARY_PASSWORD         Apple ID and app-specific password instead
@@ -30,9 +36,12 @@ jobs:
     timeout-minutes: 60
     environment: release
     env:
-      GH_TOKEN: ${{ github.token }}
+      RELEASE_REPO: unreasonable/timer
+      GH_TOKEN: ${{ secrets.UPSTREAM_RELEASE_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # release.sh checks this commit is on unreasonable/timer's main
 
       - name: Only from main
         run: |
@@ -48,8 +57,12 @@ jobs:
           NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          UPSTREAM_RELEASE_TOKEN: ${{ secrets.UPSTREAM_RELEASE_TOKEN }}
         run: |
           missing=()
+          if [ "$GITHUB_REPOSITORY" != "$RELEASE_REPO" ]; then
+            [ -n "$UPSTREAM_RELEASE_TOKEN" ] || missing+=(UPSTREAM_RELEASE_TOKEN)
+          fi
           [ -n "$DEVELOPER_ID_P12" ] || missing+=(DEVELOPER_ID_P12)
           [ -n "$DEVELOPER_ID_P12_PASSWORD" ] || missing+=(DEVELOPER_ID_P12_PASSWORD)
           [ -n "$NOTARY_KEY" ] || [ -n "$NOTARY_APPLE_ID" ] || missing+=("NOTARY_KEY (or NOTARY_APPLE_ID)")
@@ -116,14 +129,14 @@ jobs:
         run: |
           # release.sh keeps old DMGs in release/updates on a Mac; rebuild that folder here.
           mkdir -p release/updates
-          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName'); do
+          for tag in $(gh release list --repo "$RELEASE_REPO" --limit 100 --json tagName --jq '.[].tagName'); do
             version="${tag#v}"
-            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "UnreasonableTimer-$version.dmg" --dir release/updates --skip-existing || true
+            gh release download "$tag" --repo "$RELEASE_REPO" --pattern "UnreasonableTimer-$version.dmg" --dir release/updates --skip-existing || true
             if [ -f "release/updates/UnreasonableTimer-$version.dmg" ] && [ -f "release-notes/$version.md" ]; then
               cp "release-notes/$version.md" "release/updates/UnreasonableTimer-$version.md"
             fi
           done
-          gh release download --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir release/updates || true
+          gh release download --repo "$RELEASE_REPO" --pattern appcast.xml --dir release/updates || true
           ls -l release/updates
 
       - name: Provisioning profile (for shared links to open in the app)
@@ -140,6 +153,7 @@ jobs:
       - name: Release
         env:
           LAUNCH_CHECK: "1"
+          REPO: ${{ env.RELEASE_REPO }}
         run: PUBLISH=1 scripts/release.sh
 
       - name: Check what was published
@@ -147,14 +161,14 @@ jobs:
           VERSION="$(awk '/MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
           sleep 5
           for url in \
-            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml" \
-            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/UnreasonableTimer.dmg" \
-            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
+            "https://github.com/$RELEASE_REPO/releases/latest/download/appcast.xml" \
+            "https://github.com/$RELEASE_REPO/releases/latest/download/UnreasonableTimer.dmg" \
+            "https://github.com/$RELEASE_REPO/releases/download/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
             code="$(curl -sSL -o /dev/null -w '%{http_code}' "$url")"
             echo "$code  $url"
             [ "$code" = "200" ] || exit 1
           done
-          curl -sSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml" | grep -q "<sparkle:shortVersionString>$VERSION<" \
+          curl -sSL "https://github.com/$RELEASE_REPO/releases/latest/download/appcast.xml" | grep -q "<sparkle:shortVersionString>$VERSION<" \
             || { echo "The live appcast doesn't list $VERSION"; exit 1; }
           echo "Release $VERSION is live."
 

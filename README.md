@@ -82,7 +82,7 @@ Domains) and the domain lists the app. Three one-time steps:
    there) and turn on **Associated Domains**.
 2. Under Profiles, add a **Developer ID** distribution profile for that App ID and the Developer
    ID Application certificate, download it, and add it to the `release` environment:
-   `base64 -i Unreasonable_Timer.provisionprofile | gh secret set DEVELOPER_ID_PROFILE --env release --repo unreasonable/timer`.
+   `base64 -i Unreasonable_Timer.provisionprofile | gh secret set DEVELOPER_ID_PROFILE --env release --repo parterburn/unreasonable-timer`.
    (It isn't sensitive: it ships inside every copy of the app.) On a Mac, set
    `PROVISIONING_PROFILE=<path>` for `scripts/release.sh` instead.
 3. Serve `https://unreasonable.eco/.well-known/apple-app-site-association` from Eco, listing
@@ -147,11 +147,13 @@ updated in place with [Sparkle](https://sparkle-project.org). The installed app 
 1. **Developer ID certificate.** In Xcode ▸ Settings ▸ Accounts ▸ Manage Certificates, add a
    *Developer ID Application* certificate. Find its name and your team ID with
    `security find-identity -v -p codesigning`.
-2. **Notarization credentials.** Create an app-specific password at appleid.apple.com, then:
+2. **Notarization credentials.** In App Store Connect ▸ Users and Access ▸ Integrations ▸ App
+   Store Connect API, create a team key with Developer access and download its .p8 (once only),
+   then:
 
    ```sh
    xcrun notarytool store-credentials unreasonable-timer \
-     --apple-id you@example.com --team-id ABCDE12345
+     --key AuthKey_ABC123DEFG.p8 --key-id ABC123DEFG --issuer <issuer id>
    ```
 
 3. **Sparkle update key (needed for self-updating).** Without it you still get a signed, notarized
@@ -206,32 +208,49 @@ updates, which are turned off (`--maximum-deltas 0`): the full DMG is a few mega
 ### Releasing from GitHub Actions
 
 The **Release** workflow (`.github/workflows/release.yml`) runs `PUBLISH=1 scripts/release.sh` on a
-macOS runner, so a release doesn't need a particular Mac. Bump the version as above, push to
-`main`, then run the workflow from the Actions tab. It rebuilds the appcast history from the
+macOS runner, so a release doesn't need a particular Mac. It runs in
+[parterburn/unreasonable-timer](https://github.com/parterburn/unreasonable-timer), a fork that
+holds the signing secrets, and publishes to **unreasonable/timer**'s Releases, where installed
+apps get updates and the Eco page links its download. It rebuilds the appcast history from the
 earlier releases and checks the published links at the end.
 
-One-time setup: in the repo's Settings ▸ Environments, create an environment named `release`,
-limit its deployment branches to `main`, and add these secrets to it:
+Each release:
+
+1. Bump the version and add `release-notes/<version>.md` (as above) on the fork's `main`.
+2. Open a pull request into `unreasonable/timer` and merge it **with a merge commit**. A release
+   is tagged at the fork's commit in unreasonable/timer, so `release.sh` refuses a commit that
+   isn't on unreasonable/timer's `main` yet. (After a squash merge, sync the fork from upstream
+   first.)
+3. Run **Release** from the fork's Actions tab.
+
+One-time setup, in the fork: enable Actions (forks start with them off), then under Settings ▸
+Environments create an environment named `release`, limit its deployment branches to `main`, and
+add these secrets to it:
 
 | Secret | What it is |
 | --- | --- |
+| `NOTARY_KEY`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | An App Store Connect API key (team key, Developer access): the .p8 file's contents, its key ID and the issuer ID |
 | `DEVELOPER_ID_P12` | Your Developer ID Application certificate and key, exported from Keychain Access as .p12, base64-encoded |
 | `DEVELOPER_ID_P12_PASSWORD` | The password you gave that export |
-| `NOTARY_KEY`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | An App Store Connect API key (the .p8 file's contents), its key ID and the issuer ID |
-| or `NOTARY_APPLE_ID`, `NOTARY_PASSWORD` | Your Apple ID and an app-specific password, instead of the API key |
 | `SPARKLE_PRIVATE_KEY` | The contents of the file `generate_keys -x <file>` writes |
+| `UPSTREAM_RELEASE_TOKEN` | A fine-grained token with Contents read/write on unreasonable/timer only, to publish there |
+| `DEVELOPER_ID_PROFILE` (optional) | See "Shared links: opening them in the app" |
 
 ```sh
-base64 -i DeveloperID.p12 | gh secret set DEVELOPER_ID_P12 --env release --repo unreasonable/timer
-gh secret set DEVELOPER_ID_P12_PASSWORD --env release --repo unreasonable/timer
-gh secret set NOTARY_APPLE_ID --env release --repo unreasonable/timer
-gh secret set NOTARY_PASSWORD --env release --repo unreasonable/timer
-"$(find release/DerivedData -name generate_keys -type f | head -n 1)" -x sparkle-key
-gh secret set SPARKLE_PRIVATE_KEY --env release --repo unreasonable/timer < sparkle-key && rm sparkle-key
+REPO=parterburn/unreasonable-timer
+gh secret set NOTARY_KEY       --env release --repo $REPO < AuthKey_ABC123DEFG.p8
+gh secret set NOTARY_KEY_ID    --env release --repo $REPO --body ABC123DEFG
+gh secret set NOTARY_ISSUER_ID --env release --repo $REPO --body <issuer id>
+base64 -i DeveloperID.p12 | gh secret set DEVELOPER_ID_P12 --env release --repo $REPO
+gh secret set DEVELOPER_ID_P12_PASSWORD --env release --repo $REPO
+gh secret set SPARKLE_PRIVATE_KEY --env release --repo $REPO < sparkle-key && rm -P sparkle-key
+gh secret set UPSTREAM_RELEASE_TOKEN --env release --repo $REPO
 ```
 
-Anyone who can run workflows on `main` can then sign releases as you, so keep write access to
-this repo to people you'd trust with the certificate.
+The secrets stay in the fork, so only people with write access to it can sign or notarize as
+you. The token can only write to unreasonable/timer's contents; note its expiry date, because
+releases fail once it lapses. (`NOTARY_APPLE_ID` and `NOTARY_PASSWORD`, an Apple ID with an
+app-specific password, still work in place of the API key.)
 
 ### Testing an update
 

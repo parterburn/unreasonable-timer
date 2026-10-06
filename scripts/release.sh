@@ -16,6 +16,8 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-unreasonable-timer}"
 # The keychain holding that profile; your login keychain unless set (the Release workflow sets it).
 NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
 [ -n "${NOTARY_KEYCHAIN:-}" ] && NOTARY_ARGS+=(--keychain "$NOTARY_KEYCHAIN")
+# Where the release is published: the repo installed apps get updates from, whichever repo this
+# runs in (a fork keeps the signing secrets; see README, "Releasing from GitHub Actions").
 REPO="${REPO:-unreasonable/timer}"
 
 APP_NAME="Unreasonable Timer"
@@ -62,8 +64,8 @@ echo "  Identity: $DEVELOPER_ID_APPLICATION"
 echo "  Team:     $TEAM_ID"
 
 # Fail now, not after a ten-minute build, if notarization isn't set up.
-xcrun notarytool history "${NOTARY_ARGS[@]}" >/dev/null 2>&1 || fail "The notarytool profile '$NOTARY_PROFILE' doesn't work. Create it with:
-  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID"
+xcrun notarytool history "${NOTARY_ARGS[@]}" >/dev/null 2>&1 || fail "The notarytool profile '$NOTARY_PROFILE' doesn't work. Create it with an App Store Connect API key:
+  xcrun notarytool store-credentials $NOTARY_PROFILE --key AuthKey_<id>.p8 --key-id <id> --issuer <issuer id>"
 
 SPARKLE_READY=1
 case "$SPARKLE_KEY" in
@@ -79,6 +81,15 @@ if command -v gh >/dev/null 2>&1 && gh release view "$TAG" --repo "$REPO" >/dev/
   fail "$TAG is already published: https://github.com/$REPO/releases/tag/$TAG
 To ship new changes, bump MARKETING_VERSION and CURRENT_PROJECT_VERSION in project.yml.
 To add a missing file to $TAG instead, upload it:  gh release upload $TAG <file> --repo $REPO"
+fi
+
+# The release is tagged at this commit in $REPO, so the commit has to be on $REPO's main: what
+# ships is what was merged there.
+if git fetch --quiet "https://github.com/$REPO" main 2>/dev/null; then
+  git merge-base --is-ancestor HEAD FETCH_HEAD || fail "$(git rev-parse --short HEAD) isn't on $REPO's main yet.
+Merge the pull request there first (with a merge commit, so this commit lands as is), then release."
+else
+  echo "  WARNING:  couldn't fetch $REPO to check this commit is on its main"
 fi
 
 # Sparkle only offers an update whose build number is higher than the installed one. Catch a
