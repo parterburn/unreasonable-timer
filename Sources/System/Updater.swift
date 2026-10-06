@@ -24,11 +24,22 @@ final class Updater: ObservableObject {
         }
     }
 
+    /// Checks once a day (`SUScheduledCheckInterval`).
     var automaticallyChecks: Bool {
         get { controller.updater.automaticallyChecksForUpdates }
         set {
             objectWillChange.send()
             controller.updater.automaticallyChecksForUpdates = newValue
+        }
+    }
+
+    /// Downloads what a check finds in the background and installs it when the app quits, so
+    /// a running countdown is never interrupted. Only possible while `automaticallyChecks` is on.
+    var automaticallyInstalls: Bool {
+        get { controller.updater.automaticallyDownloadsUpdates }
+        set {
+            objectWillChange.send()
+            controller.updater.automaticallyDownloadsUpdates = newValue
         }
     }
 

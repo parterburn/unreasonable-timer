@@ -156,11 +156,6 @@ struct SetupView: View {
             }
         }
         .onChange(of: draft.countOver) { previewMoment = .end }
-        .onChange(of: draft.sizes) { old, new in
-            if new.lead != old.lead { previewMoment = .start }
-            if new.warning != old.warning { previewMoment = .warning }
-            if new.done != old.done || new.people != old.people { previewMoment = .end }
-        }
         .onChange(of: draft.sound) { chimes.stop() }
         .onDisappear {
             chimes.stop()
@@ -310,9 +305,9 @@ struct SetupView: View {
             }
 
             FormSection("Text") {
-                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: $draft.sizes.lead)
-                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: $draft.sizes.warning)
-                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: $draft.sizes.done)
+                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: size(\.lead, shows: .start))
+                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: size(\.warning, shows: .warning))
+                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: size(\.done, shows: .end))
             } footer: {
                 Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. The percentages set each one’s size. Paste a /timer link into any field to fill in the whole form.")
             }
@@ -330,7 +325,7 @@ struct SetupView: View {
                                 let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
                                 if digits != new { draft.people = digits }
                             }
-                        SizeStepper(title: "Size of the people waiting line", percent: $draft.sizes.people)
+                        SizeStepper(title: "Size of the people waiting line", percent: size(\.people, shows: .end))
                     }
                 }
             } footer: {
@@ -388,6 +383,18 @@ struct SetupView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+    }
+
+    /// One of the timer's sizes, for a stepper: changing it shows the moment that text appears
+    /// in (loading a timer with other sizes leaves the preview where it is).
+    private func size(_ part: WritableKeyPath<TimerSizes, Int>, shows moment: PreviewMoment) -> Binding<Int> {
+        Binding(
+            get: { draft.sizes[keyPath: part] },
+            set: { newValue in
+                draft.sizes[keyPath: part] = newValue
+                previewMoment = moment
+            }
+        )
     }
 
     /// The preview stays in view above the scrolling form, so every change shows as it's made.

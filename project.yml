@@ -13,8 +13,8 @@ settings:
     # Swift 6 toolchain, Swift 5 language mode: the AppKit/Sparkle/KeyboardShortcuts glue is
     # not yet written against strict concurrency checking. Flip to "6.0" once it builds clean.
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.5.0"
-    CURRENT_PROJECT_VERSION: "7"
+    MARKETING_VERSION: "1.6.0"
+    CURRENT_PROJECT_VERSION: "8"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES
@@ -67,6 +67,10 @@ targets:
         SUFeedURL: https://github.com/unreasonable/timer/releases/latest/download/appcast.xml
         SUPublicEDKey: RoSrowPtFb/PhBMWEDZC1VrMl2hIedfWpqBVSL5XwIE=
         SUEnableAutomaticChecks: true
+        # Check once a day, and install what's found when the app quits (Settings can turn
+        # either off).
+        SUScheduledCheckInterval: 86400
+        SUAutomaticallyUpdate: true
     settings:
       base:
         PRODUCT_NAME: Unreasonable Timer

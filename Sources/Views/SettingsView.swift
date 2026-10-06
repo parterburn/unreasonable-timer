@@ -82,10 +82,15 @@ struct SettingsView: View {
     private var updates: some View {
         FormSection("Updates") {
             if updater.isConfigured {
-                FormToggle("Check for updates automatically", isOn: Binding(
+                FormToggle("Check for updates every day", isOn: Binding(
                     get: { updater.automaticallyChecks },
                     set: { updater.automaticallyChecks = $0 }
                 ))
+                FormToggle("Install updates automatically", isOn: Binding(
+                    get: { updater.automaticallyChecks && updater.automaticallyInstalls },
+                    set: { updater.automaticallyInstalls = $0 }
+                ))
+                .disabled(!updater.automaticallyChecks)
                 FormRow {
                     Text(versionText).foregroundStyle(.secondary)
                 } label: {
@@ -105,7 +110,12 @@ struct SettingsView: View {
                 }
             }
         } footer: {
-            madeBy
+            VStack(alignment: .leading, spacing: 0) {
+                if updater.isConfigured {
+                    Text("New versions download in the background and install the next time you quit the app, so a running timer is never interrupted.")
+                }
+                madeBy
+            }
         }
     }
 
