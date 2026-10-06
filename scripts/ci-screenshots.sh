@@ -67,6 +67,10 @@ sleep 3;  capture countdown-2-running    # ~17 left
 sleep 5;  capture countdown-3-warning    # ~11 left
 sleep 6;  capture countdown-4-final      # ~5 left
 sleep 32; capture countdown-5-overtime   # ~+27
+# One click after zero only asks; the timer keeps counting until a second click.
+read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
+"$CLICK_TOOL" $((WX + WW / 2)) $((WY + WH / 2))
+sleep 0.7; capture countdown-5b-one-click-asks-before-reset
 
 open "untimer://start?time=2&over=0&lead=$LEAD"
 sleep 5;  capture countdown-6-done
