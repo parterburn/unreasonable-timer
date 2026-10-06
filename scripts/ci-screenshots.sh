@@ -84,6 +84,9 @@ capture countdown-1-paused
 read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
 "$CLICK_TOOL" right $((WX + WW / 2)) $((WY + WH / 3))
 sleep 1;  capture_screen countdown-1b-right-click-menu
+# The Timer menu has one too (closed, so it has no frame); the open right-click menu is the second.
+RESETS="$("$AX_FIND_TOOL" "$NAME" AXMenuItem list 2>/dev/null | grep -c 'Reset to 0:20' || true)"
+check "the right-click menu and the Timer menu both offer Reset to 0:20 ($RESETS found)" [ "${RESETS:-0}" -ge 2 ]
 "$HOLD_KEY_TOOL" escape 0
 sleep 1
 
@@ -152,6 +155,9 @@ sleep 3;  capture setup-5-preview-15-seconds-left
 launch -UTAppearance dark -UTPreviewMoment end
 open "untimer://edit?time=600&$LONG"
 sleep 3;  capture setup-6-preview-time-is-up
+# No text at zero (an empty done=): time's up shows only the overtime count.
+open "untimer://edit?time=600&done=&people=12"
+sleep 3;  capture setup-6b-preview-no-text-at-zero
 
 # Each text's own size, in the preview and on the countdown. At 200% the stage shrinks back to
 # fit the window rather than pushing text off it.

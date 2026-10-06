@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if controller.hasTimer {
             menu.addItem(menuItem(controller.isRunning ? "Pause" : "Start", #selector(toggleTimer)))
-            menu.addItem(menuItem("Reset", #selector(resetTimer)))
+            menu.addItem(menuItem(controller.resetTitle, #selector(resetTimer)))
             menu.addItem(.separator())
         }
 

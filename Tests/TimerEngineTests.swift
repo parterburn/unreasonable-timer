@@ -509,7 +509,32 @@ final class ConfigTests: XCTestCase {
         let config = TimerConfig(seconds: 60, leadText: "   ", warningText: "", doneText: "  ")
         XCTAssertNil(config.leadText)                      // blank lead is no lead
         XCTAssertEqual(config.warningText, "")             // blank warning stays blank, not the default
-        XCTAssertEqual(config.doneText, "Time is up!")     // blank done falls back
+        XCTAssertEqual(config.doneText, "")                // blank done is no text at zero
+        XCTAssertEqual(TimerConfig(seconds: 60).doneText, "Time is up!")
+    }
+
+    func testNoTextAtZero() throws {
+        // Links: `done` absent is the default; an empty `done=` is none.
+        XCTAssertEqual(TimerConfig(link: "https://x.test/timer?time=60")?.doneText, "Time is up!")
+        XCTAssertEqual(TimerConfig(link: "https://x.test/timer?time=60&done=")?.doneText, "")
+
+        let silent = TimerConfig(seconds: 60, doneText: "", countOver: false)
+        XCTAssertTrue(silent.shareLink().contains("&done=&") || silent.shareLink().hasSuffix("&done="))
+        XCTAssertEqual(TimerConfig(link: silent.shareLink()), silent)
+        XCTAssertTrue(silent.summary.contains("No text at 00:00"))
+        let decoded = try JSONDecoder().decode(TimerConfig.self, from: JSONEncoder().encode(silent))
+        XCTAssertEqual(decoded.doneText, "")
+
+        // At zero it shows nothing; counting over, just the overtime.
+        var engine = TimerEngine(config: silent)
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        engine.start(now: start)
+        engine.tick(now: start.addingTimeInterval(61))
+        XCTAssertEqual(engine.snapshot(now: start.addingTimeInterval(61)).displayText, "")
+        var counting = TimerEngine(config: TimerConfig(seconds: 60, doneText: ""))
+        counting.start(now: start)
+        counting.tick(now: start.addingTimeInterval(65))
+        XCTAssertEqual(counting.snapshot(now: start.addingTimeInterval(65)).displayText, "+0:05")
     }
 
     func testCodableRoundTrip() throws {

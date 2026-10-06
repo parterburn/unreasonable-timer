@@ -238,7 +238,7 @@ struct SetupView: View {
                         SidebarRow(
                             icon: "clock.arrow.circlepath",
                             title: config.durationLabel,
-                            subtitle: config.leadText ?? (config.warningText.isEmpty ? config.doneText : config.warningText),
+                            subtitle: [config.leadText ?? "", config.warningText, config.doneText].first(where: { !$0.isEmpty }) ?? "No text",
                             shortcut: nil
                         )
                         .tag(SidebarItem.recent(index))
@@ -354,9 +354,9 @@ struct SetupView: View {
             FormSection("Text") {
                 textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: .lead)
                 textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: .warning)
-                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: .done)
+                textField("At zero", text: $draft.done, prompt: "Optional", field: .done, limit: TimerConfig.maxDoneLength, size: .done)
             } footer: {
-                Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. The percentages set each one’s size. Paste a /timer link into any field to fill in the whole form.")
+                Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. Leave any of them empty for none; with no text at zero, the overtime count shows on its own. The percentages set each one’s size. Paste a /timer link into any field to fill in the whole form.")
             }
 
             FormSection("When time is up") {
@@ -925,6 +925,6 @@ private struct CountdownPreview: View {
         .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
         .allowsHitTesting(false)
         .accessibilityElement()
-        .accessibilityLabel("Preview at \(moment.title.lowercased()): \(snap.displayText)")
+        .accessibilityLabel("Preview at \(moment.title.lowercased()): \(snap.displayText.isEmpty ? "no text" : snap.displayText)")
     }
 }

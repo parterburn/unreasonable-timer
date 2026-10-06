@@ -206,12 +206,12 @@ struct CountdownView: View {
     @ViewBuilder
     private var contextMenuItems: some View {
         if snap.isExpired {
-            Button("Reset") { controller.reset() }
+            Button(controller.resetTitle) { controller.reset() }
                 .keyboardShortcut("r", modifiers: [])
         } else {
             Button(snap.isRunning ? "Pause" : "Start") { controller.toggle() }
                 .keyboardShortcut(.space, modifiers: [])
-            Button("Reset") { controller.reset() }
+            Button(controller.resetTitle) { controller.reset() }
                 .keyboardShortcut("r", modifiers: [])
         }
         Divider()

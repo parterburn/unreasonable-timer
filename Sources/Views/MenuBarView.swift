@@ -31,7 +31,7 @@ struct MenuBarView: View {
             Button(controller.isRunning ? "Pause" : "Start") { controller.toggle() }
             Button("Add 15 Seconds") { controller.adjust(by: TimerEngine.adjustStep) }
             Button("Remove 15 Seconds") { controller.adjust(by: -TimerEngine.adjustStep) }
-            Button("Reset") { controller.reset() }
+            Button(controller.resetTitle) { controller.reset() }
             Divider()
         }
 
@@ -61,7 +61,7 @@ struct MenuBarView: View {
             Divider()
             Section("Recent") {
                 ForEach(Array(store.recent.enumerated()), id: \.offset) { _, config in
-                    Button("\(config.durationLabel) · \(config.doneText)") {
+                    Button(config.doneText.isEmpty ? config.durationLabel : "\(config.durationLabel) · \(config.doneText)") {
                         controller.open(config, autostart: true)
                     }
                 }

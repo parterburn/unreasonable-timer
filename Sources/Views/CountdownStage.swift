@@ -45,6 +45,9 @@ struct CountdownStage: View {
     /// Without counting over, the text for zero takes the digits' place.
     private var isDoneText: Bool { snap.isExpired && !snap.isOvertime }
 
+    /// The text for zero above the overtime count, unless the timer has none.
+    private var showsOvertimeLabel: Bool { snap.isOvertime && !config.doneText.isEmpty }
+
     /// The digits' size before zoom: the overtime count and the countdown follow the timer's
     /// size, and the text for zero in their place follows the zero text's.
     private func digitSize(width: CGFloat) -> CGFloat {
@@ -71,7 +74,7 @@ struct CountdownStage: View {
         let line: CGFloat = 1.21   // Inter's line height
         let digit = digitSize(width: width)
         var height = digit * line
-        if snap.isOvertime {
+        if showsOvertimeLabel {
             height += Self.overtimeLabelSize(width) * sizes.done * (line + 0.4)
         }
         if snap.costText != nil {
@@ -100,7 +103,7 @@ struct CountdownStage: View {
         let digitSize = self.digitSize(width: width) * scale
 
         return VStack(spacing: 0) {
-            if snap.isOvertime {
+            if showsOvertimeLabel {
                 overtimeLabel(size: Self.overtimeLabelSize(width) * sizes.done * scale)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
@@ -176,7 +179,7 @@ struct CountdownStage: View {
         }
         .opacity(snap.isPaused ? 0.55 : 1)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: snap.isPaused)
-        .accessibilityLabel(snap.displayText)
+        .accessibilityLabel(snap.displayText.isEmpty ? "Time is up" : snap.displayText)
     }
 
     /// The digits themselves, as one text whose size, weight and colour ease into the expired

@@ -83,6 +83,9 @@ final class TimerController: ObservableObject {
     /// A timer is on the countdown screen (running, paused or finished).
     var hasTimer: Bool { screen == .countdown }
 
+    /// "Reset to 10:00": reset goes back to the timer's full time, whatever ±15 seconds did.
+    var resetTitle: String { "Reset to \(TimerFormat.clock(config.seconds))" }
+
     // MARK: Opening timers
 
     /// Shows `newConfig` in the countdown view. The setup form opens timers paused, like the web
@@ -358,7 +361,10 @@ final class TimerController: ObservableObject {
                 if engine.config.chimeAtWarning { chimes.play(.warning, sound: engine.config.sound) }
             case .zeroReached:
                 chimes.play(.zero, sound: engine.config.sound)
-                if !isTimerInFront { notifier.notifyDone(engine.config.doneText) }
+                if !isTimerInFront {
+                    let done = engine.config.doneText
+                    notifier.notifyDone(done.isEmpty ? TimerConfig.defaultDoneText : done)
+                }
             case .finalTick:
                 break
             }
