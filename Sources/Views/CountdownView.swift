@@ -18,6 +18,10 @@ struct CountdownView: View {
     @State private var zoomLabelTask: Task<Void, Never>?
     /// Where the pointer is along the progress bar, while it is over it.
     @State private var barHoverX: CGFloat?
+    /// After time is up, the first click or Space only asks; a second one within a few
+    /// seconds resets. Easy to hit by accident otherwise (a stray click, a presenter remote).
+    @State private var resetArmed = false
+    @State private var resetArmTask: Task<Void, Never>?
     @AppStorage(AppSettings.countdownZoom) private var zoom = 1.0
 
     private var snap: TimerEngine.Snapshot { clock.snapshot }
@@ -32,7 +36,6 @@ struct CountdownView: View {
             ZStack {
                 TimerBackground(palette: palette)
                 heatLayer
-                flashLayer
                 stage(in: geo.size)
                 progressBar(size: geo.size)
             }
@@ -40,11 +43,15 @@ struct CountdownView: View {
             .onChange(of: geo.size, initial: true) { _, size in viewSize = size }
         }
         .overlay(alignment: .top) { zoomBadge.animation(.easeInOut(duration: 0.2), value: zoomLabel) }
+        .overlay(alignment: .bottom) { resetPrompt.animation(.easeInOut(duration: 0.2), value: resetArmed) }
+        .onChange(of: snap.isExpired) { _, expired in
+            if !expired { disarmReset() }
+        }
         .onChange(of: zoom) { zoomChanged() }
         // Edge to edge: the glow, vignette and flash cover the title bar area too.
         .ignoresSafeArea()
         .contentShape(Rectangle())
-        .onTapGesture { controller.toggle() }
+        .onTapGesture { primaryAction() }
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
@@ -94,7 +101,7 @@ struct CountdownView: View {
 
         switch press.key {
         case .space:
-            controller.toggle()
+            primaryAction()
             return .handled
         case .escape:
             if controller.isFullscreen {
@@ -133,6 +140,49 @@ struct CountdownView: View {
         }
     }
 
+    // MARK: Start, pause, reset
+
+    /// Click or Space: start or pause; once time is up, reset, but only on the second press.
+    private func primaryAction() {
+        guard snap.isExpired else {
+            controller.toggle()
+            return
+        }
+        if resetArmed {
+            disarmReset()
+            controller.toggle()   // resets an expired timer
+        } else {
+            resetArmed = true
+            resetArmTask?.cancel()
+            resetArmTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                guard !Task.isCancelled else { return }
+                resetArmed = false
+            }
+        }
+    }
+
+    private func disarmReset() {
+        resetArmTask?.cancel()
+        resetArmed = false
+    }
+
+    @ViewBuilder
+    private var resetPrompt: some View {
+        if resetArmed {
+            Text("Click or press Space again to reset the timer")
+                .font(.inter(15, .semibold))
+                .foregroundStyle(palette.text)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(palette.background.opacity(0.85)))
+                .overlay(Capsule().stroke(palette.hairline, lineWidth: 1))
+                .padding(.bottom, 56)
+                .transition(.opacity.combined(with: .offset(y: 8)))
+                .allowsHitTesting(false)
+        }
+    }
+
     // MARK: Atmosphere
 
     /// Accent glow from the screen edges; the centre stays clear so the digits keep their contrast
@@ -154,27 +204,6 @@ struct CountdownView: View {
         }
         .allowsHitTesting(false)
         .animation(reduceMotion ? nil : .easeInOut(duration: 1), value: snap.heat)
-    }
-
-    /// A brief wash of the accent at zero.
-    private var flashLayer: some View {
-        // Plain values, not `self`, because the animator's closure isn't main-actor isolated.
-        let reduce = reduceMotion
-        return EllipticalGradient(
-            colors: [palette.flashInner, palette.flashOuter],
-            center: .center,
-            startRadiusFraction: 0,
-            endRadiusFraction: 0.7071
-        )
-        .keyframeAnimator(initialValue: 0.0, trigger: clock.zeroToken) { content, value in
-            content.opacity(reduce ? 0 : value)
-        } keyframes: { _ in
-            KeyframeTrack {
-                LinearKeyframe(0.35, duration: 0.01)
-                CubicKeyframe(0.0, duration: 1.79)
-            }
-        }
-        .allowsHitTesting(false)
     }
 
     // MARK: Progress bar
@@ -353,6 +382,7 @@ struct CountdownView: View {
         return VStack(spacing: 0) {
             if snap.isOvertime {
                 overtimeLabel(size: Self.overtimeLabelSize(width) * scale)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
 
             digits(size: digitSize, maxWidth: width * 0.94)
@@ -363,12 +393,16 @@ struct CountdownView: View {
                     .foregroundStyle(palette.accentSoft)
                     .multilineTextAlignment(.center)
                     .padding(.top, 16 * scale)
+                    .transition(.opacity)
             }
 
             messages(size: Self.messageSize(width) * scale, gap: snap.costText == nil ? digitSize * 0.7 : 26 * scale)
         }
         // When the warning appears below digits that were alone, they glide up to make room.
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: messageVisible)
+        // At zero the digits ease into the smaller overtime (or "done") style and the label
+        // fades in, rather than everything switching at once.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 1.1), value: snap.isExpired)
         .overlay(alignment: .bottom) {
             // Hangs just below the stage, like the web hint anchored to `top: 100%`.
             hint.alignmentGuide(.bottom) { $0[.top] }
@@ -376,12 +410,13 @@ struct CountdownView: View {
         .onHover { hoveringStage = $0 }
     }
 
-    /// "TIME IS UP!" in big gradient capitals while counting overtime.
+    /// The text for zero ("Time is up!"), big and in the accent gradient, while counting
+    /// overtime. Shown as typed: whoever wants capitals types them.
     private func overtimeLabel(size: CGFloat) -> some View {
         Wave(period: 2.8, active: true) { pulse in
-            Text(config.doneText.uppercased())
+            Text(config.doneText)
                 .font(.inter(size, .semibold))
-                .tracking(size * 0.08)
+                .tracking(size * 0.005)
                 .foregroundStyle(palette.accentText)
                 .shadow(color: palette.accent(0.45), radius: 8 + snap.heat * 40)
                 .scaleEffect(1 + 0.04 * pulse)
@@ -405,15 +440,17 @@ struct CountdownView: View {
                     .lineLimit(isDoneText ? 4 : 1)
                     .minimumScaleFactor(isDoneText ? 0.5 : 0.4)
                     .frame(maxWidth: maxWidth)
-                    .foregroundStyle(palette.digitColor(flash: flash))
-                    // Each second of the last ten: the digits swell slightly and settle back,
-                    // like a heartbeat. No colour change, so they read the same throughout.
+                    // Each second of the last ten: the digits swell a little and flash the
+                    // accent, then settle straight back to white, like a heartbeat.
                     .keyframeAnimator(initialValue: 0.0, trigger: clock.tickToken) { content, beat in
-                        content.scaleEffect(1 + 0.045 * ((isFinal && !reduce) ? beat : 0))
+                        let t = (isFinal && !reduce) ? beat : 0
+                        content
+                            .foregroundStyle(palette.digitColor(flash: flash, beat: t))
+                            .scaleEffect(1 + 0.045 * t)
                     } keyframes: { _ in
                         KeyframeTrack {
-                            CubicKeyframe(1.0, duration: 0.16)
-                            CubicKeyframe(0.0, duration: 0.6)
+                            CubicKeyframe(1.0, duration: 0.14)
+                            CubicKeyframe(0.0, duration: 0.5)
                         }
                     }
             }
@@ -423,27 +460,23 @@ struct CountdownView: View {
         .accessibilityLabel(snap.displayText)
     }
 
-    /// The digits themselves. While counting down the colour comes from the animator in
-    /// `digits`; once expired they carry their own gradient or muted colour.
-    @ViewBuilder
+    /// The digits themselves, as one text whose size, weight and colour ease into the expired
+    /// style at zero. While counting down the colour comes from the animator in `digits`
+    /// (`.foreground` defers to it); once expired they carry the gradient or a muted colour.
     private func digitsText(size: CGFloat, isDoneText: Bool, pulse: Double) -> some View {
         let weight: Font.Weight = snap.isOvertime ? .light : (isDoneText ? .medium : .regular)
         let tracking: CGFloat = snap.isOvertime ? size * 0.04 : (isDoneText ? -size * 0.02 : -size * 0.03)
-        let base = Text(snap.displayText)
+        let style: AnyShapeStyle = snap.isOvertime
+            ? AnyShapeStyle(palette.textMuted)
+            : (isDoneText ? AnyShapeStyle(palette.accentText) : AnyShapeStyle(ForegroundStyle()))
+        return Text(snap.displayText)
             .font(.inter(size, weight))
             .monospacedDigit()
             .tracking(tracking)
-
-        if snap.isOvertime {
-            base.foregroundStyle(palette.textMuted)
-        } else if snap.isExpired {
-            base
-                .foregroundStyle(palette.accentText)
-                .shadow(color: palette.accent(0.45), radius: 8 + snap.heat * 40)
-                .scaleEffect(1 + 0.04 * pulse)
-        } else {
-            base
-        }
+            .foregroundStyle(style)
+            .contentTransition(.interpolate)
+            .shadow(color: isDoneText ? palette.accent(0.45) : .clear, radius: isDoneText ? 8 + snap.heat * 40 : 0)
+            .scaleEffect(isDoneText ? 1 + 0.04 * pulse : 1)
     }
 
     /// Lead and warning text share one cell and cross-fade at 15 seconds, so swapping one for
@@ -496,7 +529,7 @@ struct CountdownView: View {
         .fixedSize()
         .padding(.top, 20)
         .contentShape(Rectangle())
-        .onTapGesture { controller.toggle() }
+        .onTapGesture { primaryAction() }
         .onHover { hoveringHint = $0 }
         .opacity(hintVisible ? 1 : 0)
         .animation(.easeInOut(duration: 0.3), value: hintVisible)

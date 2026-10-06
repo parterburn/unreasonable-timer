@@ -18,7 +18,7 @@ open it straight away. The countdown keeps the web page's look.
 
 | Key | Action |
 | --- | --- |
-| Space or click | Start / pause (after zero, reset) |
+| Space or click | Start / pause. After zero, press twice to reset (the first press asks) |
 | ↑ / ↓ | Add / remove 15 seconds; hold to keep going (holding ↓ stops just above zero) |
 | R | Reset |
 | F | Fullscreen on the selected display |

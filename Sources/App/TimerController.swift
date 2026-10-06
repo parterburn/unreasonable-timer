@@ -9,7 +9,6 @@ final class ClockModel: ObservableObject {
     @Published private(set) var snapshot: TimerEngine.Snapshot
     /// Bumped on each event so views can replay one-shot animations.
     @Published private(set) var tickToken = 0
-    @Published private(set) var zeroToken = 0
 
     init(snapshot: TimerEngine.Snapshot) {
         self.snapshot = snapshot
@@ -23,8 +22,7 @@ final class ClockModel: ObservableObject {
         for event in events {
             switch event {
             case .finalTick: tickToken += 1
-            case .zeroReached: zeroToken += 1
-            case .warningEntered: break
+            case .zeroReached, .warningEntered: break
             }
         }
     }

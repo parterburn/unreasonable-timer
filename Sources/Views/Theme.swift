@@ -177,6 +177,7 @@ struct Palette {
     /// Base colours kept as components so they can be blended for animations.
     let accentBase: RGBA
     let textBase: RGBA
+    let accentBrightBase: RGBA
 
     let accentTextStops: [Gradient.Stop]
     let accentFillStops: [Gradient.Stop]
@@ -184,8 +185,6 @@ struct Palette {
     let surfaceTop: Color
     let surfaceBottom: Color
     let surfaceShadow: Color
-    let flashInner: Color
-    let flashOuter: Color
 
     /// `--teal-text`: top-to-bottom gradient used on big text.
     var accentText: LinearGradient {
@@ -210,10 +209,13 @@ struct Palette {
     /// `rgba(var(--teal-rgb), x)`
     func accent(_ opacity: Double) -> Color { accentBase.color(opacity: opacity) }
 
-    /// Colour of the running digits: they flash between white and the accent from 15 seconds;
-    /// the last ten stay white and pulse in size instead (see `CountdownView.digits`).
-    func digitColor(flash: Double) -> Color {
-        textBase.mixed(with: accentBase, by: flash)
+    /// Colour of the running digits: from 15 seconds they flash between white and the accent;
+    /// in the last ten each second's `beat` is a quick flash of the bright accent that settles
+    /// back to white (see `CountdownView.digits`).
+    func digitColor(flash: Double, beat: Double) -> Color {
+        beat > 0
+            ? textBase.mixed(with: accentBrightBase, by: beat)
+            : textBase.mixed(with: accentBase, by: flash)
     }
 
     @MainActor private static var cache: [String: Palette] = [:]
@@ -256,6 +258,7 @@ struct Palette {
             grain: 0.05,
             accentBase: a.shade(0x41b8c2),
             textBase: RGBA(0xf4fbfb),
+            accentBrightBase: a.shade(0x54bfc8),
             accentTextStops: [
                 .init(color: a.shade(0xd3f1f3).color, location: 0),
                 .init(color: a.shade(0x54bfc8).color, location: 0.55),
@@ -270,9 +273,7 @@ struct Palette {
             progressStops: progress(a),
             surfaceTop: Color.white.opacity(0.04),
             surfaceBottom: Color.white.opacity(0.012),
-            surfaceShadow: Color.black.opacity(0.7),
-            flashInner: a.shade(0x54bfc8, alpha: 0.9).color,
-            flashOuter: a.shade(0x2a7c83, alpha: 0.6).color
+            surfaceShadow: Color.black.opacity(0.7)
         )
     }
 
@@ -295,6 +296,7 @@ struct Palette {
             grain: 0.03,
             accentBase: a.shade(0x2a7c83),
             textBase: RGBA(0x000000),
+            accentBrightBase: a.shade(0x41b8c2),
             accentTextStops: [
                 .init(color: a.shade(0x41b8c2).color, location: 0),
                 .init(color: a.shade(0x2a7c83).color, location: 0.55),
@@ -308,9 +310,7 @@ struct Palette {
             progressStops: progress(a),
             surfaceTop: Color.white.opacity(0.85),
             surfaceBottom: Color.white.opacity(0.85),
-            surfaceShadow: a.shade(0x1d5559, alpha: 0.35).color,
-            flashInner: a.shade(0x54bfc8, alpha: 0.5).color,
-            flashOuter: a.shade(0x41b8c2, alpha: 0.3).color
+            surfaceShadow: a.shade(0x1d5559, alpha: 0.35).color
         )
     }
 }
