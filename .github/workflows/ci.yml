@@ -121,11 +121,14 @@ jobs:
           hdiutil create -volname "Unreasonable Timer" -srcfolder dmg-test -ov -format UDZO updates-test/UnreasonableTimer-$VERSION.dmg
           cp "release-notes/$VERSION.md" "updates-test/UnreasonableTimer-$VERSION.md"
 
+          # The same arguments and clean-up as release.sh.
           "$GEN_APPCAST" \
             --download-url-prefix "https://example.com/releases/v$VERSION/" \
+            --maximum-deltas 0 \
             --embed-release-notes \
             --ed-key-file "$RUNNER_TEMP/sparkle-key" \
             updates-test
+          xcrun swift scripts/fix-appcast.swift updates-test/appcast.xml unreasonable/timer
           cat updates-test/appcast.xml
 
           for expected in \
@@ -133,9 +136,10 @@ jobs:
             "<sparkle:version>$BUILD</sparkle:version>" \
             "sparkle:shortVersionString>$VERSION" \
             'sparkle:minimumSystemVersion>14.0' \
-            "https://example.com/releases/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
+            "https://github.com/unreasonable/timer/releases/download/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
             grep -q "$expected" updates-test/appcast.xml || { echo "The appcast is missing: $expected"; exit 1; }
           done
+          if grep -q "sparkle:deltas" updates-test/appcast.xml; then echo "The appcast still has deltas"; exit 1; fi
           echo "Sparkle dry run passed"
       - name: Launch smoke test
         run: |

@@ -151,6 +151,40 @@ Keep the `release/updates` folder between releases; it holds the older DMGs the 
 is built from. The first run after `setup-sparkle.sh` makes macOS ask whether `generate_appcast`
 may use the key in your Keychain: choose Always Allow.
 
+`generate_appcast` gives every version in the feed the newest release's download prefix, so
+`scripts/fix-appcast.swift` points each one back at its own release. It also removes delta
+updates, which are turned off (`--maximum-deltas 0`): the full DMG is a few megabytes.
+
+### Releasing from GitHub Actions
+
+The **Release** workflow (`.github/workflows/release.yml`) runs `PUBLISH=1 scripts/release.sh` on a
+macOS runner, so a release doesn't need a particular Mac. Bump the version as above, push to
+`main`, then run the workflow from the Actions tab. It rebuilds the appcast history from the
+earlier releases and checks the published links at the end.
+
+One-time setup: in the repo's Settings ▸ Environments, create an environment named `release`,
+limit its deployment branches to `main`, and add these secrets to it:
+
+| Secret | What it is |
+| --- | --- |
+| `DEVELOPER_ID_P12` | Your Developer ID Application certificate and key, exported from Keychain Access as .p12, base64-encoded |
+| `DEVELOPER_ID_P12_PASSWORD` | The password you gave that export |
+| `NOTARY_KEY`, `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | An App Store Connect API key (the .p8 file's contents), its key ID and the issuer ID |
+| or `NOTARY_APPLE_ID`, `NOTARY_PASSWORD` | Your Apple ID and an app-specific password, instead of the API key |
+| `SPARKLE_PRIVATE_KEY` | The contents of the file `generate_keys -x <file>` writes |
+
+```sh
+base64 -i DeveloperID.p12 | gh secret set DEVELOPER_ID_P12 --env release --repo unreasonable/timer
+gh secret set DEVELOPER_ID_P12_PASSWORD --env release --repo unreasonable/timer
+gh secret set NOTARY_APPLE_ID --env release --repo unreasonable/timer
+gh secret set NOTARY_PASSWORD --env release --repo unreasonable/timer
+"$(find release/DerivedData -name generate_keys -type f | head -n 1)" -x sparkle-key
+gh secret set SPARKLE_PRIVATE_KEY --env release --repo unreasonable/timer < sparkle-key && rm sparkle-key
+```
+
+Anyone who can run workflows on `main` can then sign releases as you, so keep write access to
+this repo to people you'd trust with the certificate.
+
 ### Testing an update
 
 CI checks that the appcast is generated and signed, but only a real install can prove the update

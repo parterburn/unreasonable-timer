@@ -13,6 +13,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NOTARY_PROFILE="${NOTARY_PROFILE:-unreasonable-timer}"
+# The keychain holding that profile; your login keychain unless set (the Release workflow sets it).
+NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
+[ -n "${NOTARY_KEYCHAIN:-}" ] && NOTARY_ARGS+=(--keychain "$NOTARY_KEYCHAIN")
 REPO="${REPO:-unreasonable/timer}"
 
 APP_NAME="Unreasonable Timer"
@@ -59,7 +62,7 @@ echo "  Identity: $DEVELOPER_ID_APPLICATION"
 echo "  Team:     $TEAM_ID"
 
 # Fail now, not after a ten-minute build, if notarization isn't set up.
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 || fail "The notarytool profile '$NOTARY_PROFILE' doesn't work. Create it with:
+xcrun notarytool history "${NOTARY_ARGS[@]}" >/dev/null 2>&1 || fail "The notarytool profile '$NOTARY_PROFILE' doesn't work. Create it with:
   xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <you@example.com> --team-id $TEAM_ID"
 
 SPARKLE_READY=1
@@ -131,7 +134,7 @@ ditto "$ARCHIVED_APP" "$APP"
 scripts/sign-app.sh "$APP" "$DEVELOPER_ID_APPLICATION"
 
 notarize() { # <file>: submit, wait; notarytool exits non-zero if Apple rejects it
-  xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --wait
 }
 
 step "4/6 Notarizing and stapling the app"
@@ -163,7 +166,8 @@ if [ "$SPARKLE_READY" -eq 1 ]; then
   GENERATE_APPCAST="$(find "$OUT/DerivedData/SourcePackages" -type f -name generate_appcast -perm -u+x 2>/dev/null | head -n 1)"
   [ -n "$GENERATE_APPCAST" ] || fail "Could not find Sparkle's generate_appcast in the build's package artifacts."
   cp "$DMG" "$UPDATES/"
-  APPCAST_ARGS=(--download-url-prefix "https://github.com/$REPO/releases/download/$TAG/")
+  # No delta updates: they aren't uploaded, and for an app this size the full DMG is fine.
+  APPCAST_ARGS=(--download-url-prefix "https://github.com/$REPO/releases/download/$TAG/" --maximum-deltas 0)
   # Release notes for Sparkle's update window: release-notes/<version>.md, if present.
   if [ -f "release-notes/$VERSION.md" ]; then
     cp "release-notes/$VERSION.md" "$UPDATES/$(basename "$DMG" .dmg).md"
@@ -175,6 +179,8 @@ if [ "$SPARKLE_READY" -eq 1 ]; then
     APPCAST_ARGS+=(--ed-key-file "$SPARKLE_KEY_FILE")
   fi
   "$GENERATE_APPCAST" "${APPCAST_ARGS[@]}" "$UPDATES"
+  # The prefix above lands on every item; send each version back to its own release.
+  xcrun swift scripts/fix-appcast.swift "$UPDATES/appcast.xml" "$REPO"
   ASSETS+=("$UPDATES/appcast.xml")
 else
   step "6/6 Skipping the Sparkle appcast (no SUPublicEDKey yet)"
@@ -187,9 +193,12 @@ echo "  DMG: $DMG"
 
 if [ "${PUBLISH:-0}" = "1" ]; then
   step "Publishing $TAG to GitHub"
+  # The release page shows release-notes/<version>.md when there is one.
+  NOTES_ARGS=(--generate-notes)
+  [ -f "release-notes/$VERSION.md" ] && NOTES_ARGS=(--notes-file "release-notes/$VERSION.md")
   gh release create "$TAG" "${ASSETS[@]}" \
     --repo "$REPO" --target "$(git rev-parse HEAD)" \
-    --title "$APP_NAME $VERSION" --generate-notes --latest
+    --title "$APP_NAME $VERSION" "${NOTES_ARGS[@]}" --latest
   echo "  Latest download: $LATEST_DOWNLOAD_URL"
 else
   echo

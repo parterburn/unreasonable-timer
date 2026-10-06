@@ -25,15 +25,26 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $tab) {
             general
+                .safeAreaInset(edge: .bottom) { madeBy }
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag("general")
             shortcuts
+                .safeAreaInset(edge: .bottom) { madeBy }
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
                 .tag("shortcuts")
         }
         .frame(width: 500)
         .scenePadding()
         .tint((AccentColor(string: accentHex) ?? .teal).color)
+    }
+
+    /// Pinned under each tab, below the scrolling form.
+    private var madeBy: some View {
+        Text("Made by people + 🤖 from [Unreasonable](https://unreasonablegroup.com)")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
     }
 
     // MARK: General

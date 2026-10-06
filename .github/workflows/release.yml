@@ -1,0 +1,147 @@
+name: Release
+
+# Builds, signs, notarizes and publishes a release with scripts/release.sh, the same script used
+# on a Mac, so releases don't need anyone's laptop. Bump MARKETING_VERSION and
+# CURRENT_PROJECT_VERSION in project.yml first (and add release-notes/<version>.md), then run
+# this from the Actions tab. It refuses to run for a version that is already published.
+#
+# Secrets live in the "release" environment, limited to the main branch (see README):
+#   DEVELOPER_ID_P12, DEVELOPER_ID_P12_PASSWORD   Developer ID Application certificate (.p12, base64)
+#   NOTARY_KEY, NOTARY_KEY_ID, NOTARY_ISSUER_ID   App Store Connect API key for notarytool
+#     or NOTARY_APPLE_ID, NOTARY_PASSWORD         Apple ID and app-specific password instead
+#   SPARKLE_PRIVATE_KEY                           from `generate_keys -x <file>`
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, notarize and publish
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Releases are made from main, not $GITHUB_REF."
+            exit 1
+          fi
+
+      - name: Check the secrets
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          missing=()
+          [ -n "$DEVELOPER_ID_P12" ] || missing+=(DEVELOPER_ID_P12)
+          [ -n "$DEVELOPER_ID_P12_PASSWORD" ] || missing+=(DEVELOPER_ID_P12_PASSWORD)
+          [ -n "$NOTARY_KEY" ] || [ -n "$NOTARY_APPLE_ID" ] || missing+=("NOTARY_KEY (or NOTARY_APPLE_ID)")
+          [ -n "$SPARKLE_PRIVATE_KEY" ] || missing+=(SPARKLE_PRIVATE_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Missing secrets in the 'release' environment: ${missing[*]}"
+            echo "See README.md, Releasing from GitHub Actions."
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Signing keychain (certificate and notarization credentials)
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN"
+          echo "NOTARY_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+          # Apple's Developer ID intermediate, in case the runner image lacks it.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN" || true
+
+          printf '%s' "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" -P "$DEVELOPER_ID_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+          TEAM_ID="$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -nE 's/.*Developer ID Application: .*\(([A-Z0-9]{10})\)".*/\1/p' | head -n 1)"
+          if [ -n "$NOTARY_KEY" ]; then
+            printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+            xcrun notarytool store-credentials unreasonable-timer --keychain "$KEYCHAIN" \
+              --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+            rm "$RUNNER_TEMP/notary.p8"
+          else
+            xcrun notarytool store-credentials unreasonable-timer --keychain "$KEYCHAIN" \
+              --apple-id "$NOTARY_APPLE_ID" --password "$NOTARY_PASSWORD" --team-id "$TEAM_ID"
+          fi
+
+      - name: Sparkle key
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle-key"
+          echo "SPARKLE_KEY_FILE=$RUNNER_TEMP/sparkle-key" >> "$GITHUB_ENV"
+
+      - name: Earlier releases (for the appcast's history)
+        run: |
+          # release.sh keeps old DMGs in release/updates on a Mac; rebuild that folder here.
+          mkdir -p release/updates
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName'); do
+            version="${tag#v}"
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "UnreasonableTimer-$version.dmg" --dir release/updates --skip-existing || true
+            if [ -f "release/updates/UnreasonableTimer-$version.dmg" ] && [ -f "release-notes/$version.md" ]; then
+              cp "release-notes/$version.md" "release/updates/UnreasonableTimer-$version.md"
+            fi
+          done
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir release/updates || true
+          ls -l release/updates
+
+      - name: Release
+        run: PUBLISH=1 scripts/release.sh
+
+      - name: Check what was published
+        run: |
+          VERSION="$(awk '/MARKETING_VERSION:/ { gsub(/"/, "", $2); print $2; exit }' project.yml)"
+          sleep 5
+          for url in \
+            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/UnreasonableTimer.dmg" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/UnreasonableTimer-$VERSION.dmg"; do
+            code="$(curl -sSL -o /dev/null -w '%{http_code}' "$url")"
+            echo "$code  $url"
+            [ "$code" = "200" ] || exit 1
+          done
+          curl -sSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/appcast.xml" | grep -q "<sparkle:shortVersionString>$VERSION<" \
+            || { echo "The live appcast doesn't list $VERSION"; exit 1; }
+          echo "Release $VERSION is live."
+
+      - name: Clean up the keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
