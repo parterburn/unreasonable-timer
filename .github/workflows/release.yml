@@ -106,6 +106,13 @@ jobs:
           rm "$RUNNER_TEMP/developer-id.p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           security find-identity -v -p codesigning "$KEYCHAIN"
+          # Keychain Access lists several of the team's certificates; only Developer ID signs apps
+          # for outside the App Store, and an Apple Distribution one would fail much later.
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q '"Developer ID Application: '; then
+            FOUND="$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -nE 's/.*"(.*)".*/\1/p' | paste -sd ',' -)"
+            echo "::error::DEVELOPER_ID_P12 holds '${FOUND:-no signing identity}', not a 'Developer ID Application' certificate. Export that one from Keychain Access > login > My Certificates and set the secret again."
+            exit 1
+          fi
 
           TEAM_ID="$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -nE 's/.*Developer ID Application: .*\(([A-Z0-9]{10})\)".*/\1/p' | head -n 1)"
           if [ -n "$NOTARY_KEY" ]; then
