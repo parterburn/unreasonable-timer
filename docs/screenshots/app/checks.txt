@@ -1,5 +1,6 @@
 PASS  holding ↑ in the seconds field steps :00 to :05
 PASS  holding ↓ in the minutes field steps 10 to 07
+FAIL  found the size box for the text under the timer
 PASS  clicking the box and pressing ⌃⌥⌘T saves the shortcut
 PASS  after a relaunch, ⌃⌥⌘T in Finder brings the timer forward
 PASS  ⌘W closed the window
