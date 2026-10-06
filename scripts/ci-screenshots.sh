@@ -131,11 +131,16 @@ open "untimer://edit?time=600&theme=light"
 sleep 3;  capture accent-setup-light
 
 # Settings, in front of the main window. The whole screen, since the main window is larger.
+capture_screen() { # <name>
+  screencapture -x "$OUT/$1.png"
+  sips -s format jpeg -s formatOptions 82 "$OUT/$1.png" --out "$OUT/$1.jpg" >/dev/null
+  rm "$OUT/$1.png"
+  echo "captured $1"
+}
 launch -UTOpenSettings YES
-screencapture -x "$OUT/settings.png"
-sips -s format jpeg -s formatOptions 82 "$OUT/settings.png" --out "$OUT/settings.jpg" >/dev/null
-rm "$OUT/settings.png"
-echo "captured settings"
+capture_screen settings
+launch -UTOpenSettings YES -UTSettingsTab shortcuts
+capture_screen settings-shortcuts
 
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"

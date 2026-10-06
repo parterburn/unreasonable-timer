@@ -19,13 +19,17 @@ struct SettingsView: View {
     /// Toggled to make the "Open at login" row re-read `SMAppService`'s status.
     @State private var loginRefresh = false
     @State private var loginError: String?
+    /// `-UTSettingsTab shortcuts` opens on that tab, for scripts/ci-screenshots.sh.
+    @State private var tab = UserDefaults.standard.string(forKey: "UTSettingsTab") ?? "general"
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             general
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag("general")
             shortcuts
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+                .tag("shortcuts")
         }
         .frame(width: 500)
         .scenePadding()
@@ -173,9 +177,55 @@ struct SettingsView: View {
             } header: {
                 Text("Global shortcuts")
             } footer: {
-                Text("These work from any app. Start / pause begins your most recent timer when none is open.")
+                Text("None are set until you record one. These work from any app; Start / pause begins your most recent timer when none is open.")
+            }
+
+            Section("In the timer") {
+                shortcutRow("Start / pause", "Space", note: "or click")
+                shortcutRow("Add / remove 15 seconds", "↑", "↓", note: "hold to repeat")
+                shortcutRow("Reset", "R")
+                shortcutRow("Fullscreen on the selected display", "F")
+                shortcutRow("Leave fullscreen", "Esc")
+                shortcutRow("Jump to a point", note: "click the progress bar")
+                shortcutRow("Zoom in / out / actual size", "⌘+", "⌘−", "⌘0")
+            }
+
+            Section("Anywhere in the app") {
+                shortcutRow("Reset", "⌘R")
+                shortcutRow("Add / remove 15 seconds", "⌘↑", "⌘↓")
+                shortcutRow("Back to the setup form", "⌘E")
+                shortcutRow("Present on the selected display", "⇧⌘F")
+                shortcutRow("Fill the form from a copied link", "⇧⌘V")
+                shortcutRow("Start a saved timer", "⌘1", "…", "⌘9")
+                shortcutRow("Settings", "⌘,")
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// A built-in shortcut, drawn as key caps.
+    private func shortcutRow(_ title: String, _ keys: String..., note: String? = nil) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 4) {
+                if let note = note {
+                    Text(note)
+                        .foregroundStyle(.secondary)
+                        .padding(.trailing, keys.isEmpty ? 0 : 4)
+                }
+                ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                    if key == "…" {
+                        Text(key).foregroundStyle(.secondary)
+                    } else {
+                        Text(key)
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .frame(minWidth: 22)
+                            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary))
+                            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(.tertiary, lineWidth: 0.5))
+                    }
+                }
+            }
+        }
     }
 }
