@@ -1,0 +1,5 @@
+PASS  clicking the box and pressing ⌃⌥⌘T saves the shortcut
+PASS  after a relaunch, ⌃⌥⌘T in Finder brings the timer forward
+PASS  ⌘W closed the window
+PASS  with the window closed, ⌃⌥⌘T opens it again
+PASS  with the window closed, ⌃⌥⌘T brings the timer forward
