@@ -10,7 +10,7 @@ Requires macOS 14 (Sonoma) or later.
 
 The setup screen is laid out like System Settings: saved and recent timers in the sidebar, and
 the timer's options in a grouped form under a live preview of the countdown: the web form's
-options, plus each timer's accent color and sound (None, Classic, Singing bowl or Marimba, with
+options, plus each timer's accent color (Unreasonable's colors first; point at one for its name) and sound (None, Classic, Singing bowl or Marimba, with
 buttons to hear them; the singing bowl rings three times at zero). The sounds are made by
 `scripts/make-sounds.py`. Pick a duration with the fields or the 1–60 minute buttons. **Start Timer** (or
 Return) opens the countdown paused, as the web page does; double-click a timer in the sidebar to

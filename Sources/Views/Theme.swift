@@ -90,9 +90,10 @@ struct RGBA: Hashable {
 ///
 /// The web timer's teal is one hue at one saturation, used at several lightnesses (#d3f1f3,
 /// #b9e6ea, #54bfc8, #41b8c2, #2A7C83, #1D5559, #0b2426). Any accent gets the same family:
-/// each shade keeps the accent's hue and saturation and takes the teal shade's lightness, so
-/// contrast against the dark and light backgrounds stays what the web design intends. Teal
-/// itself maps back to the exact web values.
+/// each shade keeps the accent's hue and saturation, and sits as far from the teal shade's
+/// lightness as the accent sits from teal's. So the accent itself shows exactly as chosen (a
+/// brand colour stays the brand colour) and the family keeps the web design's spread of
+/// contrast. Teal itself maps back to the exact web values.
 struct AccentColor: Hashable {
     let hex: UInt32
 
@@ -101,11 +102,16 @@ struct AccentColor: Hashable {
     struct Preset: Identifiable {
         let name: String
         let accent: AccentColor
+        /// Unreasonable's own colours, listed first.
+        var brand = false
         var id: UInt32 { accent.hex }
     }
 
     static let presets: [Preset] = [
-        Preset(name: "Teal", accent: .teal),
+        Preset(name: "Unreasonable Teal", accent: .teal, brand: true),
+        Preset(name: "Unreasonable Impact", accent: AccentColor(hex: 0x36A0CE), brand: true),
+        Preset(name: "Unreasonable Food", accent: AccentColor(hex: 0x00D6B8), brand: true),
+        Preset(name: "Eco Purple", accent: AccentColor(hex: 0x6926E3), brand: true),
         Preset(name: "Blue", accent: AccentColor(hex: 0x3B8FD9)),
         Preset(name: "Indigo", accent: AccentColor(hex: 0x5C6BD6)),
         Preset(name: "Violet", accent: AccentColor(hex: 0x8E5CD6)),
@@ -150,7 +156,8 @@ struct AccentColor: Hashable {
         let mine = RGBA(hex).hsl
         let target = RGBA(tealHex).hsl
         let saturation = base.s > 0 ? min(1, mine.s * target.s / base.s) : mine.s
-        return RGBA(h: mine.h, s: saturation, l: target.l, a: alpha)
+        let lightness = min(max(target.l + (mine.l - base.l), 0.04), 0.96)
+        return RGBA(h: mine.h, s: saturation, l: lightness, a: alpha)
     }
 }
 
