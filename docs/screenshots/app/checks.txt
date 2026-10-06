@@ -1,4 +1,4 @@
-FAIL  the right-click menu offers Reset to 0:20
+PASS  the right-click menu and the Timer menu both offer Reset to 0:20 (2 found)
 PASS  holding ↑ in the seconds field steps :00 to :05
 PASS  holding ↓ in the minutes field steps 10 to 07
 PASS  typing 150 into a size box
