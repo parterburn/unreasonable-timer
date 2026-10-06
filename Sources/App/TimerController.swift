@@ -358,7 +358,10 @@ final class TimerController: ObservableObject {
                 if engine.config.chimeAtWarning { chimes.play(.warning, sound: engine.config.sound) }
             case .zeroReached:
                 chimes.play(.zero, sound: engine.config.sound)
-                if !isTimerInFront { notifier.notifyDone(engine.config.doneText) }
+                if !isTimerInFront {
+                    let done = engine.config.doneText
+                    notifier.notifyDone(done.isEmpty ? TimerConfig.defaultDoneText : done)
+                }
             case .finalTick:
                 break
             }

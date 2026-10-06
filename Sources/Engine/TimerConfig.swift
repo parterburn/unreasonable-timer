@@ -94,6 +94,8 @@ public struct TimerConfig: Codable, Hashable, Sendable {
     public var leadText: String?
     /// Replaces the lead text from 15 seconds left. Empty means none.
     public var warningText: String
+    /// Shown when time is up. Empty means none, only the overtime count (or nothing): the Mac
+    /// app's own choice, since the web page shows its default for a blank `done`.
     public var doneText: String
     /// Keep counting up ("+m:ss") after zero instead of stopping.
     public var countOver: Bool
@@ -127,8 +129,7 @@ public struct TimerConfig: Codable, Hashable, Sendable {
 
         self.warningText = TimerConfig.clean(warningText, limit: TimerConfig.maxWarningLength)
 
-        let done = TimerConfig.clean(doneText, limit: TimerConfig.maxDoneLength)
-        self.doneText = done.isEmpty ? TimerConfig.defaultDoneText : done
+        self.doneText = TimerConfig.clean(doneText, limit: TimerConfig.maxDoneLength)
 
         self.countOver = countOver
 
@@ -198,7 +199,7 @@ extension TimerConfig {
 
         var parts = [
             texts.isEmpty ? "No text under timer" : texts,
-            "“\(doneText)” at 00:00",
+            doneText.isEmpty ? "No text at 00:00" : "“\(doneText)” at 00:00",
             countOver ? "Keeps counting" : "Stops at 00:00",
         ]
         if let people = people {
@@ -291,7 +292,9 @@ extension TimerConfig {
             leadText: params["lead"],
             // `text` present (even empty) overrides the default; absent keeps it.
             warningText: params["text"] ?? TimerConfig.defaultWarningText,
-            doneText: params["done"] ?? "",
+            // `done` absent is the default text. The web form never writes it empty, so an empty
+            // `done=` means none (the web page still shows its default for it).
+            doneText: params["done"] ?? TimerConfig.defaultDoneText,
             countOver: params["over"] != "0",
             people: people > 0 ? people : nil,
             theme: params["theme"] == "light" ? .light : .dark,

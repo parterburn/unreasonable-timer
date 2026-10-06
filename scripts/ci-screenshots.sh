@@ -152,6 +152,9 @@ sleep 3;  capture setup-5-preview-15-seconds-left
 launch -UTAppearance dark -UTPreviewMoment end
 open "untimer://edit?time=600&$LONG"
 sleep 3;  capture setup-6-preview-time-is-up
+# No text at zero (an empty done=): time's up shows only the overtime count.
+open "untimer://edit?time=600&done=&people=12"
+sleep 3;  capture setup-6b-preview-no-text-at-zero
 
 # Each text's own size, in the preview and on the countdown. At 200% the stage shrinks back to
 # fit the window rather than pushing text off it.

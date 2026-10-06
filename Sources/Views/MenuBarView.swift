@@ -61,7 +61,7 @@ struct MenuBarView: View {
             Divider()
             Section("Recent") {
                 ForEach(Array(store.recent.enumerated()), id: \.offset) { _, config in
-                    Button("\(config.durationLabel) · \(config.doneText)") {
+                    Button(config.doneText.isEmpty ? config.durationLabel : "\(config.durationLabel) · \(config.doneText)") {
                         controller.open(config, autostart: true)
                     }
                 }
