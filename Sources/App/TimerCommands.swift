@@ -17,6 +17,21 @@ struct TimerCommands: Commands {
                 .disabled(!updater.canCheckForUpdates)
         }
 
+        // Zoom applies to the countdown, like zooming the web page in a browser. The countdown
+        // view also takes ⌘= for Zoom In.
+        CommandGroup(before: .toolbar) {
+            Button("Actual Size") { CountdownZoom.reset() }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(!controller.hasTimer)
+            Button("Zoom In") { CountdownZoom.zoomIn() }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(!controller.hasTimer)
+            Button("Zoom Out") { CountdownZoom.zoomOut() }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(!controller.hasTimer)
+            Divider()
+        }
+
         CommandMenu("Timer") {
             Button(controller.isRunning ? "Pause" : "Start") { controller.toggle() }
                 .disabled(!controller.hasTimer)

@@ -30,6 +30,8 @@ WINDOW_ID_TOOL="${RUNNER_TEMP:-/tmp}/window-id"
 swiftc -O scripts/window-id.swift -o "$WINDOW_ID_TOOL"
 HOLD_KEY_TOOL="${RUNNER_TEMP:-/tmp}/hold-key"
 swiftc -O scripts/hold-key.swift -o "$HOLD_KEY_TOOL"
+CLICK_TOOL="${RUNNER_TEMP:-/tmp}/click"
+swiftc -O scripts/click.swift -o "$CLICK_TOOL"
 
 system_profiler SPDisplaysDataType | grep -E "Resolution|UI Looks like" || true
 
@@ -79,6 +81,25 @@ sleep 1;  capture keys-1-held-up-expect-6m15s
 open "untimer://open?time=50"
 sleep 3;  "$HOLD_KEY_TOOL" down 10
 sleep 1;  capture keys-2-held-down-expect-5s
+
+# Digits on their own sit in the middle; the warning line only takes room from 15 seconds.
+open "untimer://open?time=600"
+sleep 3;  capture countdown-8-centered
+
+# Clicking a quarter of the way along the progress bar jumps to a quarter of the time. The
+# pointer stays there, so the bar shows its hover state and time label.
+read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
+echo "window: $WX $WY $WW $WH"
+"$CLICK_TOOL" $((WX + WW / 4)) $((WY + WH - 6))
+sleep 1;  capture seek-1-clicked-quarter-expect-2m30s
+
+# ⌘= twice is 125%; six more reaches the largest zoom that fits; ⌘0 (View ▸ Actual Size) resets.
+"$HOLD_KEY_TOOL" equals 0 cmd; sleep 0.3; "$HOLD_KEY_TOOL" equals 0 cmd
+sleep 0.4; capture zoom-1-125pct
+for _ in 1 2 3 4 5 6; do "$HOLD_KEY_TOOL" equals 0 cmd; sleep 0.3; done
+sleep 0.2; capture zoom-2-largest
+"$HOLD_KEY_TOOL" zero 0 cmd
+sleep 2;  capture zoom-3-actual-size
 
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light

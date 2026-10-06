@@ -88,6 +88,19 @@ public struct TimerEngine {
         return events
     }
 
+    /// Where a click on the progress bar lands: `fraction` of the full time (the bar's width),
+    /// in whole seconds. Never zero, so a click can't end the timer.
+    public func seconds(atFraction fraction: Double) -> Int {
+        let target = Int((min(max(fraction, 0), 1) * Double(config.seconds)).rounded())
+        return min(max(target, 1), config.seconds)
+    }
+
+    /// Jumps to `fraction` of the full time left, as clicking the progress bar does.
+    @discardableResult
+    public mutating func seek(toFraction fraction: Double, now: Date) -> [TimerEvent] {
+        adjust(by: seconds(atFraction: fraction) - remaining, now: now)
+    }
+
     /// Advances the countdown to `now`. Call a few times a second while `isRunning`.
     @discardableResult
     public mutating func tick(now: Date) -> [TimerEvent] {

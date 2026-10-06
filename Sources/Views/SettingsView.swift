@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.chimeAtZero) private var chimeAtZero = true
     @AppStorage(AppSettings.presentDisplay) private var presentDisplay = 0
     @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
+    @AppStorage(AppSettings.chimeSound) private var chimeSound = ChimeSound.classic.rawValue
+    @ObservedObject private var chimes = ChimePlayer.shared
 
     /// Toggled to make the "Open at login" row re-read `SMAppService`'s status.
     @State private var loginRefresh = false
@@ -55,9 +57,15 @@ struct SettingsView: View {
             }
 
             Section("Sounds") {
-                Toggle("Chime at 15 seconds left", isOn: $chimeAtWarning)
-                Toggle("Chime at zero", isOn: $chimeAtZero)
-                Text("A notification also appears at zero when the timer isn't in front.")
+                Picker("Sound", selection: $chimeSound) {
+                    ForEach(ChimeSound.allCases) { sound in
+                        Text(sound.title).tag(sound.rawValue)
+                    }
+                }
+                .onChange(of: chimeSound) { chimes.stop() }
+                chimeRow("Chime at 15 seconds left", isOn: $chimeAtWarning, moment: .warning)
+                chimeRow("Chime at zero", isOn: $chimeAtZero, moment: .zero)
+                Text(chimeFootnote)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -76,9 +84,14 @@ struct SettingsView: View {
                         get: { updater.automaticallyChecks },
                         set: { updater.automaticallyChecks = $0 }
                     ))
-                    Button("Check Now") { updater.checkForUpdates() }
-                        .disabled(!updater.canCheckForUpdates)
+                    HStack {
+                        Button("Check Now") { updater.checkForUpdates() }
+                            .disabled(!updater.canCheckForUpdates)
+                        Spacer()
+                        Text(versionText).foregroundStyle(.secondary)
+                    }
                 } else {
+                    LabeledContent("Version", value: versionText)
                     Text("Updates aren't set up in this build. See the README to add a Sparkle key.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -86,6 +99,41 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onDisappear { chimes.stop() }
+    }
+
+    /// "Version 1.2.0 (3)"
+    private var versionText: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info["CFBundleVersion"] as? String ?? "?"
+        return "Version \(version) (\(build))"
+    }
+
+    private var chimeFootnote: String {
+        let bowl = chimeSound == ChimeSound.singingBowl.rawValue
+            ? "The singing bowl rings three times at zero, about ten seconds apart. " : ""
+        return bowl + "A notification also appears at zero when the timer isn't in front."
+    }
+
+    /// A chime toggle with a play/stop button to hear it.
+    private func chimeRow(_ title: String, isOn: Binding<Bool>, moment: ChimePlayer.Moment) -> some View {
+        let playing = chimes.previewing == moment
+        return Toggle(isOn: isOn) {
+            HStack(spacing: 6) {
+                Text(title)
+                Button {
+                    chimes.togglePreview(moment, sound: ChimeSound(rawValue: chimeSound) ?? .classic)
+                } label: {
+                    Image(systemName: playing ? "stop.circle.fill" : "play.circle")
+                        .imageScale(.large)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.borderless)
+                .help(playing ? "Stop" : "Preview")
+                .accessibilityLabel(playing ? "Stop preview" : "Preview \(title.lowercased())")
+            }
+        }
     }
 
     /// Backed by the system's login-item state rather than a stored flag, so it stays right if

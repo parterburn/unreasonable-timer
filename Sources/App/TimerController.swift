@@ -63,6 +63,7 @@ final class TimerController: ObservableObject {
     private let keepAwake = KeepAwake()
     private let dockTile = DockTile()
     private let notifier = Notifier()
+    private let chimes = ChimePlayer.shared
     private var windowObservers: [NSObjectProtocol] = []
 
     private init() {
@@ -156,6 +157,18 @@ final class TimerController: ObservableObject {
         guard screen == .countdown else { return }
         apply(engine.adjust(by: delta, now: Date()))
         ensureTicking()
+    }
+
+    /// Jumps to the point on the progress bar at `fraction` (0 = its left end, 1 = the full time).
+    func seek(toFraction fraction: Double) {
+        guard screen == .countdown else { return }
+        apply(engine.seek(toFraction: fraction, now: Date()))
+        ensureTicking()
+    }
+
+    /// The time a click at `fraction` of the progress bar would jump to.
+    func secondsLeft(atFraction fraction: Double) -> Int {
+        engine.seconds(atFraction: fraction)
     }
 
     /// For global shortcuts and Shortcuts.app: toggles the current timer, or starts the most
@@ -281,9 +294,9 @@ final class TimerController: ObservableObject {
         for event in events {
             switch event {
             case .warningEntered:
-                if defaults.bool(forKey: AppSettings.chimeAtWarning) { notifier.play(.warning) }
+                if defaults.bool(forKey: AppSettings.chimeAtWarning) { chimes.play(.warning) }
             case .zeroReached:
-                if defaults.bool(forKey: AppSettings.chimeAtZero) { notifier.play(.done) }
+                if defaults.bool(forKey: AppSettings.chimeAtZero) { chimes.play(.zero) }
                 if !isTimerInFront { notifier.notifyDone(engine.config.doneText) }
             case .finalTick:
                 break
@@ -308,6 +321,9 @@ final class TimerController: ObservableObject {
         if menuTitle != title { menuTitle = title }
 
         keepAwake.setHeld(running && UserDefaults.standard.bool(forKey: AppSettings.keepAwake))
+
+        // A bowl still ringing from zero fades out once the timer is reset, replaced or left.
+        if screen != .countdown || !snapshot.isExpired { chimes.timerNoLongerExpired() }
 
         dockTile.update(title.map { text in
             DockTile.State(

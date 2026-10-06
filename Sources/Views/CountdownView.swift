@@ -13,7 +13,13 @@ struct CountdownView: View {
     @State private var hoveringHint = false
     @State private var isIdle = false
     @State private var idleTask: Task<Void, Never>?
+    @State private var viewSize: CGSize = .zero
+    @State private var zoomLabel: String?
+    @State private var zoomLabelTask: Task<Void, Never>?
+    /// Where the pointer is along the progress bar, while it is over it.
+    @State private var barHoverX: CGFloat?
     @AppStorage(AppSettings.accentColor) private var accentHex = AccentColor.teal.string
+    @AppStorage(AppSettings.countdownZoom) private var zoom = 1.0
 
     private var snap: TimerEngine.Snapshot { clock.snapshot }
     private var config: TimerConfig { controller.config }
@@ -29,10 +35,13 @@ struct CountdownView: View {
                 heatLayer
                 flashLayer
                 stage(in: geo.size)
-                progressBar(height: geo.size.height)
+                progressBar(size: geo.size)
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .onChange(of: geo.size, initial: true) { _, size in viewSize = size }
         }
+        .overlay(alignment: .top) { zoomBadge.animation(.easeInOut(duration: 0.2), value: zoomLabel) }
+        .onChange(of: zoom) { zoomChanged() }
         // Edge to edge: the glow, vignette and flash cover the title bar area too.
         .ignoresSafeArea()
         .contentShape(Rectangle())
@@ -60,6 +69,12 @@ struct CountdownView: View {
     /// Space, ↑/↓, R, F, as on the web page, plus Esc to leave fullscreen. Holding ↑/↓ keeps
     /// adjusting at the system key-repeat rate; the other keys act once per press.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        // The View menu's Zoom In is ⌘+, which takes Shift on most keyboards; browsers also
+        // accept ⌘=, so this does too.
+        if press.modifiers == .command && press.phase == .down && press.characters == "=" {
+            CountdownZoom.zoomIn()
+            return .handled
+        }
         if !press.modifiers.intersection([.command, .control, .option]).isEmpty { return .ignored }
 
         switch press.key {
@@ -163,61 +178,199 @@ struct CountdownView: View {
         .allowsHitTesting(false)
     }
 
-    private func progressBar(height: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Spacer()
-            ZStack(alignment: .leading) {
-                Rectangle().fill(palette.accent(0.08))
-                Rectangle()
-                    .fill(palette.progressGradient)
-                    .shadow(color: palette.accent(0.35), radius: 18)
-                    .brightness(snap.isWarning ? 0.08 : 0)
-                    .saturation(snap.isWarning ? 1.2 : 1)
-                    .scaleEffect(x: max(snap.progress, 0.0001), y: 1, anchor: .leading)
-                    .animation(reduceMotion ? nil : .linear(duration: 0.25), value: snap.progress)
+    // MARK: Progress bar
+
+    /// Height of the strip along the bottom that responds to the pointer; the bar itself is
+    /// only a few points tall.
+    private static let barHitHeight: CGFloat = 28
+
+    /// The progress bar. Click or drag along it to jump to that point in the countdown; while
+    /// the pointer is over it the bar thickens and shows the time it would jump to.
+    private func progressBar(size: CGSize) -> some View {
+        let thickness = max(2, size.height * 0.008)
+        let seekable = !snap.isExpired
+        let hovering = barHoverX != nil && seekable
+        return VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ZStack(alignment: .bottomLeading) {
+                Color.clear
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(palette.accent(hovering ? 0.16 : 0.08))
+                    Rectangle()
+                        .fill(palette.progressGradient)
+                        .shadow(color: palette.accent(0.35), radius: 18)
+                        .brightness(snap.isWarning ? 0.08 : 0)
+                        .saturation(snap.isWarning ? 1.2 : 1)
+                        .scaleEffect(x: max(snap.progress, 0.0001), y: 1, anchor: .leading)
+                        .animation(reduceMotion ? nil : .linear(duration: 0.25), value: snap.progress)
+                }
+                .frame(height: hovering ? max(thickness * 2.2, 8) : thickness)
+                .opacity(snap.isExpired ? 0 : (snap.isPaused && !hovering ? 0.4 : 1))
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: snap.isExpired)
+                .animation(.easeOut(duration: 0.15), value: hovering)
             }
-            .frame(height: max(2, height * 0.008))
-            .opacity(snap.isExpired ? 0 : (snap.isPaused ? 0.4 : 1))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: snap.isExpired)
+            .frame(height: Self.barHitHeight)
+            .contentShape(Rectangle())
+            .overlay(alignment: .bottomLeading) {
+                if let x = barHoverX, seekable {
+                    seekLabel(at: x, width: size.width)
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { controller.seek(toFraction: Double($0.location.x / max(size.width, 1))) }
+            )
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    if barHoverX == nil { NSCursor.pointingHand.push() }
+                    barHoverX = location.x
+                    wake()
+                case .ended:
+                    if barHoverX != nil { NSCursor.pop() }
+                    barHoverX = nil
+                }
+            }
+            .onDisappear {
+                if barHoverX != nil { NSCursor.pop() }
+                barHoverX = nil
+            }
+            .allowsHitTesting(seekable)
         }
-        .allowsHitTesting(false)
+    }
+
+    /// The time a click would jump to, floating above the pointer.
+    private func seekLabel(at x: CGFloat, width: CGFloat) -> some View {
+        let seconds = controller.secondsLeft(atFraction: Double(x / max(width, 1)))
+        return Text(TimerFormat.clock(seconds))
+            .font(.inter(13, .semibold))
+            .monospacedDigit()
+            .foregroundStyle(palette.text)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(palette.background.opacity(0.85)))
+            .overlay(Capsule().stroke(palette.hairline, lineWidth: 1))
+            .fixedSize()
+            // Centred on the pointer, kept inside the window, just above the strip.
+            .alignmentGuide(.leading) { d in
+                d.width / 2 - min(max(x, d.width / 2 + 8), width - d.width / 2 - 8)
+            }
+            .alignmentGuide(.bottom) { d in d.height + Self.barHitHeight + 4 }
+            .allowsHitTesting(false)
+    }
+
+    // MARK: Zoom
+
+    /// ⌘+/⌘- scale everything on the stage. Zooming out always applies; zooming in stops once
+    /// the stage would no longer fit the window's height.
+    private func effectiveZoom(in size: CGSize) -> CGFloat {
+        let requested = CGFloat(zoom)
+        guard requested > 1 else { return max(requested, 0.25) }
+        return min(requested, max(1, fitZoom(in: size)))
+    }
+
+    /// The largest zoom at which the stage's current contents fit 88% of the window's height.
+    private func fitZoom(in size: CGSize) -> CGFloat {
+        let width = size.width
+        let line: CGFloat = 1.21   // Inter's line height
+        let digit = baseDigitSize(width: width)
+        var height = digit * line
+        if snap.isOvertime {
+            height += Self.overtimeLabelSize(width) * (line + 0.4)
+        }
+        if snap.costText != nil {
+            height += Self.costSize(width) * line + 16
+        }
+        if messageVisible {
+            height += (snap.costText == nil ? digit * 0.7 : 26) + Self.messageSize(width) * line
+        }
+        return size.height * 0.88 / max(height, 1)
+    }
+
+    /// Shows the new zoom for a moment, and pulls a zoom-in that can't fit back to the largest
+    /// step that does, so the next ⌘- has an effect straight away.
+    private func zoomChanged() {
+        let fit = max(1, fitZoom(in: viewSize))
+        if zoom > 1, CGFloat(zoom) > fit + 0.001 {
+            let largest = CountdownZoom.levels.last { CGFloat($0) <= fit } ?? 1
+            if largest != zoom {
+                zoom = largest
+                return   // runs again for the new value
+            }
+        }
+        let atMax = zoom > 1 && CountdownZoom.levels.first(where: { $0 > zoom + 0.001 }).map { CGFloat($0) > fit } ?? true
+        zoomLabel = "\(Int((zoom * 100).rounded()))%" + (atMax ? " · largest that fits" : "")
+        zoomLabelTask?.cancel()
+        zoomLabelTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+            zoomLabel = nil
+        }
+    }
+
+    @ViewBuilder
+    private var zoomBadge: some View {
+        if let label = zoomLabel {
+            Text(label)
+                .font(.inter(14, .semibold))
+                .monospacedDigit()
+                .foregroundStyle(palette.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(palette.background.opacity(0.85)))
+                .overlay(Capsule().stroke(palette.hairline, lineWidth: 1))
+                .padding(.top, 40)
+                .transition(.opacity)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: Stage
 
+    // Type sizes from the web page's clamp() rules, before zoom.
+
+    /// Digit size steps down once expired, and again in overtime, so a count-up can't be
+    /// mistaken for a countdown that is still running.
+    private func baseDigitSize(width: CGFloat) -> CGFloat {
+        if snap.isOvertime { return .clamp(width * 0.052, min: 31.2, max: 72.8) }
+        if snap.isExpired { return .clamp(width * 0.0845, min: 54.08, max: 121.76) }
+        return .clamp(width * 0.1521, min: 81.12, max: 216.32)
+    }
+
+    private static func messageSize(_ width: CGFloat) -> CGFloat { .clamp(width * 0.0507, min: 33.76, max: 74.4) }
+    private static func costSize(_ width: CGFloat) -> CGFloat { .clamp(width * 0.0254, min: 20.32, max: 40.64) }
+    private static func overtimeLabelSize(_ width: CGFloat) -> CGFloat { .clamp(width * 0.072, min: 44.8, max: 114.4) }
+
+    /// Whether the lead/warning line is showing anything. It only takes up room when it is, so
+    /// digits on their own sit in the middle of the window.
+    private var messageVisible: Bool {
+        showsWarning ? !config.warningText.isEmpty : config.leadText != nil
+    }
+
     private func stage(in size: CGSize) -> some View {
         let width = size.width
-
-        // Digit size steps down once expired, and again in overtime, so a count-up can't be
-        // mistaken for a countdown that is still running.
-        let digitSize: CGFloat
-        if snap.isOvertime {
-            digitSize = .clamp(width * 0.052, min: 31.2, max: 72.8)
-        } else if snap.isExpired {
-            digitSize = .clamp(width * 0.0845, min: 54.08, max: 121.76)
-        } else {
-            digitSize = .clamp(width * 0.1521, min: 81.12, max: 216.32)
-        }
-        let messageSize = CGFloat.clamp(width * 0.0507, min: 33.76, max: 74.4)
-        let costSize = CGFloat.clamp(width * 0.0254, min: 20.32, max: 40.64)
+        let scale = effectiveZoom(in: size)
+        let digitSize = baseDigitSize(width: width) * scale
 
         return VStack(spacing: 0) {
             if snap.isOvertime {
-                overtimeLabel(width: width)
+                overtimeLabel(size: Self.overtimeLabelSize(width) * scale)
             }
 
             digits(size: digitSize, maxWidth: width * 0.94)
 
             if let cost = snap.costText {
                 Text(cost)
-                    .font(.inter(costSize))
+                    .font(.inter(Self.costSize(width) * scale))
                     .foregroundStyle(palette.accentSoft)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 16)
+                    .padding(.top, 16 * scale)
             }
 
-            messages(size: messageSize, gap: snap.costText == nil ? digitSize * 0.7 : 26)
+            messages(size: Self.messageSize(width) * scale, gap: snap.costText == nil ? digitSize * 0.7 : 26 * scale)
         }
+        // When the warning appears below digits that were alone, they glide up to make room.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: messageVisible)
         .overlay(alignment: .bottom) {
             // Hangs just below the stage, like the web hint anchored to `top: 100%`.
             hint.alignmentGuide(.bottom) { $0[.top] }
@@ -226,9 +379,8 @@ struct CountdownView: View {
     }
 
     /// "TIME IS UP!" in big gradient capitals while counting overtime.
-    private func overtimeLabel(width: CGFloat) -> some View {
-        let size = CGFloat.clamp(width * 0.072, min: 44.8, max: 114.4)
-        return Wave(period: 2.8, active: true) { pulse in
+    private func overtimeLabel(size: CGFloat) -> some View {
+        Wave(period: 2.8, active: true) { pulse in
             Text(config.doneText.uppercased())
                 .font(.inter(size, .semibold))
                 .tracking(size * 0.08)
@@ -255,16 +407,15 @@ struct CountdownView: View {
                     .lineLimit(isDoneText ? 4 : 1)
                     .minimumScaleFactor(isDoneText ? 0.5 : 0.4)
                     .frame(maxWidth: maxWidth)
-                    // Each second of the last ten: a small pop from the bright accent back to white.
-                    .keyframeAnimator(initialValue: 0.0, trigger: clock.tickToken) { content, tick in
-                        let t = (isFinal && !reduce) ? tick : 0
-                        content
-                            .foregroundStyle(palette.digitColor(isFinal: isFinal, flash: flash, tick: t))
-                            .scaleEffect(1 + 0.05 * t)
+                    .foregroundStyle(palette.digitColor(flash: flash))
+                    // Each second of the last ten: the digits swell slightly and settle back,
+                    // like a heartbeat. No colour change, so they read the same throughout.
+                    .keyframeAnimator(initialValue: 0.0, trigger: clock.tickToken) { content, beat in
+                        content.scaleEffect(1 + 0.045 * ((isFinal && !reduce) ? beat : 0))
                     } keyframes: { _ in
                         KeyframeTrack {
-                            LinearKeyframe(1.0, duration: 0.01)
-                            CubicKeyframe(0.0, duration: 0.99)
+                            CubicKeyframe(1.0, duration: 0.16)
+                            CubicKeyframe(0.0, duration: 0.6)
                         }
                     }
             }
@@ -297,13 +448,13 @@ struct CountdownView: View {
         }
     }
 
-    /// Lead and warning text share one cell and cross-fade at 15 seconds, so the swap never
-    /// shifts the digits.
+    /// Lead and warning text share one cell and cross-fade at 15 seconds, so swapping one for
+    /// the other never shifts the digits. With nothing to show, the cell isn't there at all.
     @ViewBuilder
     private func messages(size: CGFloat, gap: CGFloat) -> some View {
         let lead = config.leadText
         let warning = config.warningText
-        if lead != nil || !warning.isEmpty {
+        if messageVisible {
             ZStack {
                 if let lead = lead {
                     Text(lead)
@@ -322,9 +473,11 @@ struct CountdownView: View {
                 }
             }
             .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.5)
             .padding(.horizontal, 41.6)
             .padding(.top, gap)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: showsWarning)
+            .transition(.opacity.combined(with: .offset(y: 12)))
         }
     }
 

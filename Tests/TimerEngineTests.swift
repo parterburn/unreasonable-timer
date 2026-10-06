@@ -257,6 +257,42 @@ final class AdjustTests: XCTestCase {
     }
 }
 
+final class SeekTests: XCTestCase {
+    func testSeekJumpsToAFractionOfTheFullTime() {
+        var engine = makeEngine(seconds: 600)
+        engine.seek(toFraction: 0.25, now: t0)
+        XCTAssertEqual(engine.remaining, 150)
+        XCTAssertFalse(engine.isRunning)
+
+        engine.start(now: t0)
+        engine.tick(now: at(10))
+        engine.seek(toFraction: 0.5, now: at(10))
+        XCTAssertEqual(engine.remaining, 300)
+        XCTAssertEqual(engine.endsAt, at(310))
+        engine.tick(now: at(20))
+        XCTAssertEqual(engine.remaining, 290)
+    }
+
+    func testSeekNeverEndsTheTimer() {
+        var engine = makeEngine(seconds: 600)
+        XCTAssertEqual(engine.seconds(atFraction: 0), 1)
+        XCTAssertEqual(engine.seconds(atFraction: -2), 1)
+        XCTAssertEqual(engine.seconds(atFraction: 1.4), 600)
+        XCTAssertEqual(engine.seconds(atFraction: 0.501), 301)
+        engine.seek(toFraction: 0, now: t0)
+        XCTAssertEqual(engine.remaining, 1)
+        XCTAssertFalse(engine.isExpired)
+    }
+
+    func testSeekIntoTheLastSecondsWhileRunning() {
+        var engine = makeEngine(seconds: 600)
+        engine.start(now: t0)
+        let events = engine.seek(toFraction: 0.02, now: at(1))
+        XCTAssertEqual(engine.remaining, 12)
+        XCTAssertEqual(events, [.warningEntered])
+    }
+}
+
 final class AppearanceTests: XCTestCase {
     func testProgressFraction() {
         var engine = makeEngine(seconds: 100)

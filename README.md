@@ -19,8 +19,10 @@ light or dark theme. **Start Timer** opens the countdown paused, as the web page
 | R | Reset |
 | F | Fullscreen on the selected display |
 | Esc | Leave fullscreen |
+| ⌘+ / ⌘- / ⌘0 | Zoom the countdown in / out / back to actual size (⌘= works too) |
 | ⌘E | Back to the setup form |
 
+Click or drag along the progress bar to jump to that point; hovering it shows the time.
 Move the mouse to show the hint line; it and the cursor hide after 2.5 seconds of stillness.
 
 ### Saved timers
@@ -58,7 +60,8 @@ means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` sele
 
 Accent color (teal by default; also on the setup form), keep the display awake while running
 (on by default), keep the timer above other windows,
-which display to go fullscreen on, chimes at 15 seconds and at zero, menu bar item, open at
+which display to go fullscreen on, chimes at 15 seconds and at zero (Classic, Singing bowl or
+Marimba, each with a preview button; the sounds are made by `scripts/make-sounds.py`), menu bar item, open at
 login, and updates.
 
 ## Building

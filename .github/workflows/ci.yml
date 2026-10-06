@@ -33,6 +33,11 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             -quiet
+      - name: Chime sounds are in the app
+        run: |
+          for sound in singing-bowl-zero singing-bowl-warning marimba-zero marimba-warning; do
+            ls -l "build/Build/Products/Debug/Unreasonable Timer.app/Contents/Resources/$sound.m4a" || exit 1
+          done
       - name: Test
         run: |
           set -o pipefail

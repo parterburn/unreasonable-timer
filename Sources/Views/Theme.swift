@@ -177,7 +177,6 @@ struct Palette {
     /// Base colours kept as components so they can be blended for animations.
     let accentBase: RGBA
     let textBase: RGBA
-    let accentBrightBase: RGBA
 
     let accentTextStops: [Gradient.Stop]
     let accentFillStops: [Gradient.Stop]
@@ -211,12 +210,10 @@ struct Palette {
     /// `rgba(var(--teal-rgb), x)`
     func accent(_ opacity: Double) -> Color { accentBase.color(opacity: opacity) }
 
-    /// Colour of the running digits: they flash between white and the accent from 15 seconds,
-    /// then from 10 seconds each tick pops in the bright accent and settles back to white.
-    func digitColor(isFinal: Bool, flash: Double, tick: Double) -> Color {
-        isFinal
-            ? textBase.mixed(with: accentBrightBase, by: tick)
-            : textBase.mixed(with: accentBase, by: flash)
+    /// Colour of the running digits: they flash between white and the accent from 15 seconds;
+    /// the last ten stay white and pulse in size instead (see `CountdownView.digits`).
+    func digitColor(flash: Double) -> Color {
+        textBase.mixed(with: accentBase, by: flash)
     }
 
     @MainActor private static var cache: [String: Palette] = [:]
@@ -259,7 +256,6 @@ struct Palette {
             grain: 0.05,
             accentBase: a.shade(0x41b8c2),
             textBase: RGBA(0xf4fbfb),
-            accentBrightBase: a.shade(0x54bfc8),
             accentTextStops: [
                 .init(color: a.shade(0xd3f1f3).color, location: 0),
                 .init(color: a.shade(0x54bfc8).color, location: 0.55),
@@ -299,7 +295,6 @@ struct Palette {
             grain: 0.03,
             accentBase: a.shade(0x2a7c83),
             textBase: RGBA(0x000000),
-            accentBrightBase: a.shade(0x41b8c2),
             accentTextStops: [
                 .init(color: a.shade(0x41b8c2).color, location: 0),
                 .init(color: a.shade(0x2a7c83).color, location: 0.55),

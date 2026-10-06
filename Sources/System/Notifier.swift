@@ -1,14 +1,9 @@
 import AppKit
 import UserNotifications
 
-/// Notification and chime when a timer ends.
+/// The notification when a timer ends while the app isn't in front. Chimes are `ChimePlayer`.
 @MainActor
 final class Notifier {
-    enum Chime: String {
-        case warning = "Tink"
-        case done = "Glass"
-    }
-
     private var requestedAuthorization = false
 
     /// Asks for permission the first time a timer starts, so the prompt arrives with context.
@@ -24,9 +19,5 @@ final class Notifier {
         content.body = "Your timer has finished."
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
-    }
-
-    func play(_ chime: Chime) {
-        NSSound(named: NSSound.Name(chime.rawValue))?.play()
     }
 }
