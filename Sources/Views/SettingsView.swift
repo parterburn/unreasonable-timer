@@ -55,6 +55,7 @@ struct SettingsView: View {
             Text("Timer")
         } footer: {
             Text("Each timer has its own sound, accent color and theme; set them when you edit the timer.")
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         Section("App") {
@@ -140,6 +141,7 @@ struct SettingsView: View {
             Text("Shortcuts from any app")
         } footer: {
             Text("None are set until you record one. These work from any app; Start / pause begins your most recent timer when none is open.")
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         Section("In the timer") {
