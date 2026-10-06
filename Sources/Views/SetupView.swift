@@ -746,6 +746,10 @@ private struct SizeStepper: View {
             HStack(spacing: 1) {
                 TextField(part.title, text: $text, prompt: Text("100"))
                     .labelsHidden()
+                    // A hidden label isn't read out, so name the box for VoiceOver (and the
+                    // scripted checks, by identifier).
+                    .accessibilityLabel(part.title)
+                    .accessibilityIdentifier("size-\(part)")
                     .textFieldStyle(.plain)
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()

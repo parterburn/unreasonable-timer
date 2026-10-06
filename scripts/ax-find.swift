@@ -1,6 +1,6 @@
 // Finds an element in an app's windows by accessibility role or subrole and prints the centre
 // of the nth match (in the order the accessibility tree lists them, from 1), or of the first
-// whose label (description or title) is the given text, as "x y" (global, top-left origin,
+// whose label (description, title or identifier) is the given text, as "x y" (global, top-left origin,
 // like CGWindowList bounds), for scripts/ci-screenshots.sh to click; or with `value`, prints
 // its value. `list` prints every match with its label and value, to see what's there.
 //   swiftc scripts/ax-find.swift -o ax-find
@@ -45,14 +45,16 @@ func collect(_ element: AXUIElement, depth: Int) {
 }
 collect(AXUIElementCreateApplication(app.processIdentifier), depth: 0)
 
-func label(_ element: AXUIElement) -> String {
-    (value(element, kAXDescriptionAttribute) as? String).flatMap { $0.isEmpty ? nil : $0 }
-        ?? value(element, kAXTitleAttribute) as? String ?? ""
+/// The labels an element answers to: its description, title and identifier.
+func labels(_ element: AXUIElement) -> [String] {
+    [kAXDescriptionAttribute, kAXTitleAttribute, "AXIdentifier"].compactMap {
+        (value(element, $0) as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
 }
 
 if selector == "list" {
     for (number, element) in matches.enumerated() {
-        print("\(number + 1)\t\(label(element))\t\(value(element, kAXValueAttribute) as? String ?? "")")
+        print("\(number + 1)\t\(labels(element).joined(separator: " | "))\t\(value(element, kAXValueAttribute) as? String ?? "")")
     }
     exit(0)
 }
@@ -64,7 +66,7 @@ if let index = Int(selector) {
     }
     element = matches[index - 1]
 } else {
-    guard let match = matches.first(where: { label($0) == selector }) else {
+    guard let match = matches.first(where: { labels($0).contains(selector) }) else {
         fail("ax-find: no \(wanted) labelled \"\(selector)\" in \(args[1])")
     }
     element = match

@@ -187,7 +187,7 @@ fi
 # A size can be typed: click the box for the text under the timer, select all and type 150;
 # then ↑ while typing steps to 160.
 "$AX_FIND_TOOL" "$NAME" AXTextField list || true
-LEAD_SIZE="Size of the text under the timer"
+LEAD_SIZE="size-lead"   # the box's accessibility identifier
 if SIZE_FIELD="$("$AX_FIND_TOOL" "$NAME" AXTextField "$LEAD_SIZE")"; then
   read -r SX SY <<<"$SIZE_FIELD"
   "$CLICK_TOOL" "$SX" "$SY"; sleep 0.5
