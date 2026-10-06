@@ -1,6 +1,9 @@
 PASS  holding ↑ in the seconds field steps :00 to :05
 PASS  holding ↓ in the minutes field steps 10 to 07
-FAIL  found the size box for the text under the timer
+PASS  typing 150 into a size box
+PASS  ↑ while typing in a size box steps 150 to 160
+PASS  Copy Link copies an unreasonable.eco/timer link with the timer in it
+PASS  opening the copied link shows the countdown, not the form
 PASS  clicking the box and pressing ⌃⌥⌘T saves the shortcut
 PASS  after a relaunch, ⌃⌥⌘T in Finder brings the timer forward
 PASS  ⌘W closed the window

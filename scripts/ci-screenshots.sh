@@ -218,7 +218,7 @@ check "Copy Link copies an unreasonable.eco/timer link with the timer in it" bas
   '[[ "$1" == "https://unreasonable.eco/timer?time=20&"* && "$1" == *"people=12"* && "$1" == *"accent=6926E3"* && "$1" == *"lead=Intro%3A%20our%20first%20speaker"* ]]' _ "$LINK"
 open "untimer://edit?time=600"
 sleep 3
-open -a "$APP" "$LINK"
+open -b com.unreasonablegroup.timer "$LINK"   # by bundle ID: `open -a` wants an absolute path
 sleep 3
 capture share-1-opened-from-copied-link
 check "opening the copied link shows the countdown, not the form" bash -c "! '$AX_FIND_TOOL' '$NAME' AXTextField 1 >/dev/null 2>&1"
