@@ -65,7 +65,7 @@ targets:
         # Sparkle. Replace SUPublicEDKey with the output of Sparkle's `generate_keys`
         # (see README); until then the app skips starting the updater.
         SUFeedURL: https://github.com/unreasonable/timer/releases/latest/download/appcast.xml
-        SUPublicEDKey: REPLACE_WITH_SPARKLE_PUBLIC_KEY
+        SUPublicEDKey: RoSrowPtFb/PhBMWEDZC1VrMl2hIedfWpqBVSL5XwIE=
         SUEnableAutomaticChecks: true
     settings:
       base:
