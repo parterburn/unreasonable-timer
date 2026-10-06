@@ -140,9 +140,12 @@ updated in place with [Sparkle](https://sparkle-project.org). The installed app 
    the Swift package dependencies, and the archive then fails. If a Sparkle key is configured it
    also regenerates `release/updates/appcast.xml`; otherwise that step is skipped and you still
    get a DMG.
-3. Publish with `PUBLISH=1 scripts/release.sh`, or run the `gh release create` command the script
-   prints. Upload `appcast.xml` with every release: the app reads
-   `releases/latest/download/appcast.xml`.
+3. Publish with `PUBLISH=1 scripts/release.sh`. It uploads three files: the versioned DMG (what
+   the appcast points at), the same DMG as `UnreasonableTimer.dmg`, and `appcast.xml`. If you
+   upload by hand, include all three: the app reads `releases/latest/download/appcast.xml`, and
+   the fixed name keeps this link pointing at the newest version:
+
+   <https://github.com/unreasonable/timer/releases/latest/download/UnreasonableTimer.dmg>
 
 Keep the `release/updates` folder between releases; it holds the older DMGs the appcast history
 is built from. The first run after `setup-sparkle.sh` makes macOS ask whether `generate_appcast`

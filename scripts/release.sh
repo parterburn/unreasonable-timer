@@ -144,7 +144,13 @@ notarize "$DMG"
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
-ASSETS=("$DMG")
+# The same DMG under a fixed name, so LATEST_DOWNLOAD_URL always serves the newest release.
+# The versioned file is the one the appcast points at, and it isn't copied into $UPDATES.
+LATEST_DMG="$OUT/UnreasonableTimer.dmg"
+LATEST_DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$(basename "$LATEST_DMG")"
+cp "$DMG" "$LATEST_DMG"
+
+ASSETS=("$DMG" "$LATEST_DMG")
 if [ "$SPARKLE_READY" -eq 1 ]; then
   step "6/6 Updating the Sparkle appcast"
   GENERATE_APPCAST="$(find "$OUT/DerivedData/SourcePackages" -type f -name generate_appcast -perm -u+x 2>/dev/null | head -n 1)"
@@ -176,7 +182,8 @@ if [ "${PUBLISH:-0}" = "1" ]; then
   step "Publishing $TAG to GitHub"
   gh release create "$TAG" "${ASSETS[@]}" \
     --repo "$REPO" --target "$(git rev-parse HEAD)" \
-    --title "$APP_NAME $VERSION" --generate-notes
+    --title "$APP_NAME $VERSION" --generate-notes --latest
+  echo "  Latest download: $LATEST_DOWNLOAD_URL"
 else
   echo
   echo "To publish:  PUBLISH=1 scripts/release.sh   (or upload the DMG to a GitHub release yourself)"
