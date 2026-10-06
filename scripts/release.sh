@@ -157,8 +157,33 @@ if [ "${LAUNCH_CHECK:-0}" = "1" ]; then
   echo "  the signed app launched and ran for 8 seconds"
 fi
 
-notarize() { # <file>: submit, wait; notarytool exits non-zero if Apple rejects it
-  xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --wait
+notary_status() { # <submission id>: Accepted, In Progress, Invalid or Rejected; empty if unreachable
+  xcrun notarytool info "$1" "${NOTARY_ARGS[@]}" --output-format json 2>/dev/null \
+    | sed -nE 's/.*"status" *: *"([^"]+)".*/\1/p' | head -n 1 || true
+}
+
+# Submit, then wait for Apple's verdict. Apple sometimes takes most of an hour, and a dropped
+# connection mid-wait used to fail the release; now the wait picks the submission up again.
+notarize() { # <file>
+  local name submitted id status attempt
+  name="$(basename "$1")"
+  submitted="$(xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --output-format json)" \
+    || fail "Couldn't upload $name to Apple's notary service."
+  id="$(printf '%s' "$submitted" | grep -oE '[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}' | head -n 1 || true)"
+  [ -n "$id" ] || fail "Apple's notary service didn't return a submission ID for $name: $submitted"
+  echo "  submitted $name for notarization: $id"
+  for attempt in 1 2 3 4 5 6; do
+    xcrun notarytool wait "$id" "${NOTARY_ARGS[@]}" && break
+    status="$(notary_status "$id")"
+    [ -z "$status" ] || [ "$status" = "In Progress" ] || break
+    echo "  lost touch with the notary service (attempt $attempt); waiting on $id again"
+    sleep 30
+  done
+  status="$(notary_status "$id")"
+  if [ "$status" != "Accepted" ]; then
+    xcrun notarytool log "$id" "${NOTARY_ARGS[@]}" || true
+    fail "Apple didn't notarize $name (status: ${status:-unknown}, submission $id)."
+  fi
 }
 
 step "4/6 Notarizing and stapling the app"
