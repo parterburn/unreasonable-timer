@@ -25,11 +25,9 @@ struct SettingsView: View {
     var body: some View {
         TabView(selection: $tab) {
             general
-                .safeAreaInset(edge: .bottom) { madeBy }
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag("general")
             shortcuts
-                .safeAreaInset(edge: .bottom) { madeBy }
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
                 .tag("shortcuts")
         }
@@ -38,13 +36,13 @@ struct SettingsView: View {
         .tint((AccentColor(string: accentHex) ?? .teal).color)
     }
 
-    /// Pinned under each tab, below the scrolling form.
+    /// The last line of each tab, under its final group.
     private var madeBy: some View {
         Text("Made by people + 🤖 from [Unreasonable](https://unreasonablegroup.com)")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.top, 18)
     }
 
     // MARK: General
@@ -93,7 +91,7 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Updates") {
+            Section {
                 if updater.isConfigured {
                     Toggle("Check for updates automatically", isOn: Binding(
                         get: { updater.automaticallyChecks },
@@ -111,6 +109,10 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+            } header: {
+                Text("Updates")
+            } footer: {
+                madeBy
             }
         }
         .formStyle(.grouped)
@@ -201,7 +203,7 @@ struct SettingsView: View {
                 shortcutRow("Zoom in / out / actual size", "⌘+", "⌘−", "⌘0")
             }
 
-            Section("Anywhere in the app") {
+            Section {
                 shortcutRow("Reset", "⌘R")
                 shortcutRow("Add / remove 15 seconds", "⌘↑", "⌘↓")
                 shortcutRow("Back to the setup form", "⌘E")
@@ -209,6 +211,10 @@ struct SettingsView: View {
                 shortcutRow("Fill the form from a copied link", "⇧⌘V")
                 shortcutRow("Start a saved timer", "⌘1", "…", "⌘9")
                 shortcutRow("Settings", "⌘,")
+            } header: {
+                Text("Anywhere in the app")
+            } footer: {
+                madeBy
             }
         }
         .formStyle(.grouped)

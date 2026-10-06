@@ -129,8 +129,13 @@ capture_screen() { # <name>
 }
 launch -UTOpenSettings YES
 capture_screen settings
+# Scrolled to the end (Sounds, Updates, the footer). Settings opens centred on the screen.
+read -r _ _ SW SH <<<"$(system_profiler SPDisplaysDataType | awk '/Resolution/ { print 0, 0, $2, $4; exit }')"
+"$CLICK_TOOL" scroll $(( ${SW:-1024} / 2 )) $(( ${SH:-768} / 2 )) -60
+sleep 1;  capture_screen settings-bottom
 launch -UTOpenSettings YES -UTSettingsTab shortcuts
-capture_screen settings-shortcuts
+"$CLICK_TOOL" scroll $(( ${SW:-1024} / 2 )) $(( ${SH:-768} / 2 )) -60
+sleep 1;  capture_screen settings-shortcuts-bottom
 
 osascript -e "tell application \"$NAME\" to quit" || true
 ls -la "$OUT"
