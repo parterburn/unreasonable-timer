@@ -153,6 +153,37 @@ launch -UTAppearance dark -UTPreviewMoment end
 open "untimer://edit?time=600&$LONG"
 sleep 3;  capture setup-6-preview-time-is-up
 
+# Each text's own size, in the preview and on the countdown. At 200% the stage shrinks back to
+# fit the window rather than pushing text off it.
+SIZES="timersize=140&leadsize=70&textsize=130&donesize=150&peoplesize=120"
+launch
+open "untimer://edit?time=600&$LONG&$SIZES"
+sleep 3;  capture setup-8-sizes
+open "untimer://open?time=20&lead=$LEAD&people=12&$SIZES"
+sleep 3;  capture countdown-9-sizes
+open "untimer://open?time=20&$LONG&timersize=200&leadsize=200"
+sleep 3;  capture countdown-10-sizes-200-still-fit
+
+# ↑/↓ step the field being edited, holding to repeat: from 10:00, ↑ and four repeats in the
+# seconds field make 10:05, then ↓ and two repeats in the minutes field make 7:05.
+open "untimer://edit?time=600"
+sleep 3
+if TIME_FIELD="$("$AX_FIND_TOOL" "$NAME" AXTextField 2)"; then
+  read -r FX FY <<<"$TIME_FIELD"
+  "$CLICK_TOOL" "$FX" "$FY"; sleep 0.5
+  "$HOLD_KEY_TOOL" up 4;     sleep 0.5
+  echo "seconds field: $("$AX_FIND_TOOL" "$NAME" AXTextField 2 value)"
+  check "holding ↑ in the seconds field steps :00 to :05" [ "$("$AX_FIND_TOOL" "$NAME" AXTextField 2 value)" = "05" ]
+  read -r FX FY <<<"$("$AX_FIND_TOOL" "$NAME" AXTextField 1)"
+  "$CLICK_TOOL" "$FX" "$FY"; sleep 0.5
+  "$HOLD_KEY_TOOL" down 2;   sleep 0.5
+  echo "minutes field: $("$AX_FIND_TOOL" "$NAME" AXTextField 1 value)"
+  check "holding ↓ in the minutes field steps 10 to 07" [ "$("$AX_FIND_TOOL" "$NAME" AXTextField 1 value)" = "07" ]
+  capture setup-7-arrow-keys-expect-7m05s
+else
+  check "found the minutes and seconds fields" false
+fi
+
 # Another accent (Eco Purple) with the singing bowl: both belong to the timer, so a link sets them.
 ORANGE="accent=6926E3&sound=singing-bowl&chime15=1"
 launch -UTAppearance dark

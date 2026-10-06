@@ -15,6 +15,55 @@ public enum TimerSound: String, Codable, CaseIterable, Sendable {
     case marimba
 }
 
+/// How large each part of the countdown is drawn, in percent of the web page's size. Mac-only,
+/// like the accent: the web page always draws 100%.
+public struct TimerSizes: Codable, Hashable, Sendable {
+    public static let range = 50...200
+    public static let step = 10
+
+    /// The digits (and the overtime count).
+    public var timer: Int
+    /// The text under the timer.
+    public var lead: Int
+    /// The text at 15 seconds left.
+    public var warning: Int
+    /// The text at zero.
+    public var done: Int
+    /// The "N people waiting" line.
+    public var people: Int
+
+    public init(timer: Int = 100, lead: Int = 100, warning: Int = 100, done: Int = 100, people: Int = 100) {
+        self.timer = TimerSizes.clamped(timer)
+        self.lead = TimerSizes.clamped(lead)
+        self.warning = TimerSizes.clamped(warning)
+        self.done = TimerSizes.clamped(done)
+        self.people = TimerSizes.clamped(people)
+    }
+
+    /// All at 100%.
+    public var isStandard: Bool { self == TimerSizes() }
+
+    static func clamped(_ percent: Int) -> Int {
+        min(max(percent, range.lowerBound), range.upperBound)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case timer, lead, warning, done, people
+    }
+
+    /// Missing sizes are 100%; out-of-range ones are held to `range`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            timer: try c.decodeIfPresent(Int.self, forKey: .timer) ?? 100,
+            lead: try c.decodeIfPresent(Int.self, forKey: .lead) ?? 100,
+            warning: try c.decodeIfPresent(Int.self, forKey: .warning) ?? 100,
+            done: try c.decodeIfPresent(Int.self, forKey: .done) ?? 100,
+            people: try c.decodeIfPresent(Int.self, forKey: .people) ?? 100
+        )
+    }
+}
+
 /// Everything that defines one timer. Mirrors the params of the web `/timer` page
 /// (`StaticController#timer`), including its limits and defaults.
 public struct TimerConfig: Codable, Hashable, Sendable {
@@ -47,6 +96,7 @@ public struct TimerConfig: Codable, Hashable, Sendable {
     public var sound: TimerSound
     /// Also chime at 15 seconds left (zero always chimes unless `sound` is `.none`).
     public var chimeAtWarning: Bool
+    public var sizes: TimerSizes
 
     public init(
         seconds: Int,
@@ -58,7 +108,8 @@ public struct TimerConfig: Codable, Hashable, Sendable {
         theme: TimerThemeMode = .dark,
         accent: String? = nil,
         sound: TimerSound = .classic,
-        chimeAtWarning: Bool = false
+        chimeAtWarning: Bool = false,
+        sizes: TimerSizes = TimerSizes()
     ) {
         self.seconds = min(max(seconds, 1), TimerConfig.maxSeconds)
 
@@ -82,6 +133,7 @@ public struct TimerConfig: Codable, Hashable, Sendable {
         self.accent = TimerConfig.normalizedAccent(accent)
         self.sound = sound
         self.chimeAtWarning = chimeAtWarning
+        self.sizes = sizes
     }
 
     /// "#RRGGBB" in capitals from "#rrggbb" or "rrggbb"; nil for the default teal or anything else.
@@ -94,7 +146,7 @@ public struct TimerConfig: Codable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seconds, leadText, warningText, doneText, countOver, people, theme, accent, sound, chimeAtWarning
+        case seconds, leadText, warningText, doneText, countOver, people, theme, accent, sound, chimeAtWarning, sizes
     }
 
     /// Tolerant decoding so presets saved by older versions keep loading.
@@ -110,7 +162,8 @@ public struct TimerConfig: Codable, Hashable, Sendable {
             theme: try c.decodeIfPresent(TimerThemeMode.self, forKey: .theme) ?? .dark,
             accent: try c.decodeIfPresent(String.self, forKey: .accent),
             sound: (try? c.decodeIfPresent(TimerSound.self, forKey: .sound)) ?? .classic,
-            chimeAtWarning: try c.decodeIfPresent(Bool.self, forKey: .chimeAtWarning) ?? false
+            chimeAtWarning: try c.decodeIfPresent(Bool.self, forKey: .chimeAtWarning) ?? false,
+            sizes: (try? c.decodeIfPresent(TimerSizes.self, forKey: .sizes)) ?? TimerSizes()
         )
     }
 
@@ -168,6 +221,11 @@ extension TimerConfig {
         guard seconds > 0 else { return nil }
 
         let people = TimerFormat.rubyToI(params["people"] ?? "")
+        // A size given as a positive whole percentage; anything else is 100%.
+        func size(_ name: String) -> Int {
+            let percent = TimerFormat.rubyToI(params[name] ?? "")
+            return percent > 0 ? percent : 100
+        }
 
         self.init(
             seconds: seconds,
@@ -178,10 +236,18 @@ extension TimerConfig {
             countOver: params["over"] != "0",
             people: people > 0 ? people : nil,
             theme: params["theme"] == "light" ? .light : .dark,
-            // Mac-only extras, ignored by the web page: accent=E8743B, sound=singing-bowl, chime15=1.
+            // Mac-only extras, ignored by the web page: accent=E8743B, sound=singing-bowl,
+            // chime15=1, and sizes in percent (timersize, leadsize, textsize, donesize, peoplesize).
             accent: params["accent"],
             sound: params["sound"].flatMap { TimerSound(rawValue: $0.lowercased()) } ?? .classic,
-            chimeAtWarning: params["chime15"] == "1"
+            chimeAtWarning: params["chime15"] == "1",
+            sizes: TimerSizes(
+                timer: size("timersize"),
+                lead: size("leadsize"),
+                warning: size("textsize"),
+                done: size("donesize"),
+                people: size("peoplesize")
+            )
         )
     }
 

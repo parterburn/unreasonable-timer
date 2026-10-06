@@ -3,8 +3,9 @@ import TimerCore
 
 /// What the countdown shows in the middle of the window: the digits (or the text for zero),
 /// the overtime label, the room's cost line and the lead or warning text, sized by the web
-/// page's clamp() rules for `size`. The countdown screen draws it live; the setup screen's
-/// preview draws it for a chosen moment, scaled down.
+/// page's clamp() rules for `size`, then by the timer's own size for each (`TimerSizes`). The
+/// countdown screen draws it live; the setup screen's preview draws it for a chosen moment,
+/// scaled down.
 struct CountdownStage: View {
     let snap: TimerEngine.Snapshot
     let config: TimerConfig
@@ -21,7 +22,7 @@ struct CountdownStage: View {
     /// The lead text gives way to the warning text from 15 seconds on, and stays gone.
     private var showsWarning: Bool { snap.isWarning || snap.isExpired }
 
-    // Type sizes from the web page's clamp() rules, before zoom.
+    // Type sizes from the web page's clamp() rules, before the timer's sizes and zoom.
 
     /// Digit size steps down once expired, and again in overtime, so a count-up can't be
     /// mistaken for a countdown that is still running.
@@ -35,6 +36,29 @@ struct CountdownStage: View {
     static func costSize(_ width: CGFloat) -> CGFloat { .clamp(width * 0.0254, min: 20.32, max: 40.64) }
     static func overtimeLabelSize(_ width: CGFloat) -> CGFloat { .clamp(width * 0.072, min: 44.8, max: 114.4) }
 
+    /// The timer's own size for each part, as a factor.
+    private var sizes: (timer: CGFloat, lead: CGFloat, warning: CGFloat, done: CGFloat, people: CGFloat) {
+        let s = config.sizes
+        return (CGFloat(s.timer) / 100, CGFloat(s.lead) / 100, CGFloat(s.warning) / 100, CGFloat(s.done) / 100, CGFloat(s.people) / 100)
+    }
+
+    /// Without counting over, the text for zero takes the digits' place.
+    private var isDoneText: Bool { snap.isExpired && !snap.isOvertime }
+
+    /// The digits' size before zoom: the overtime count and the countdown follow the timer's
+    /// size, and the text for zero in their place follows the zero text's.
+    private func digitSize(width: CGFloat) -> CGFloat {
+        baseDigitSize(width: width) * (isDoneText ? sizes.done : sizes.timer)
+    }
+
+    /// The lead/warning cell holds both texts, so it is as tall as the larger of them.
+    private func messageLineSize(width: CGFloat) -> CGFloat {
+        let size = Self.messageSize(width)
+        let lead = config.leadText == nil ? 0 : size * 0.75 * sizes.lead
+        let warning = config.warningText.isEmpty ? 0 : size * sizes.warning
+        return max(lead, warning)
+    }
+
     /// Whether the lead/warning line is showing anything. It only takes up room when it is, so
     /// digits on their own sit in the middle of the window.
     private var messageVisible: Bool {
@@ -45,27 +69,39 @@ struct CountdownStage: View {
     func fitZoom() -> CGFloat {
         let width = size.width
         let line: CGFloat = 1.21   // Inter's line height
-        let digit = baseDigitSize(width: width)
+        let digit = digitSize(width: width)
         var height = digit * line
         if snap.isOvertime {
-            height += Self.overtimeLabelSize(width) * (line + 0.4)
+            height += Self.overtimeLabelSize(width) * sizes.done * (line + 0.4)
         }
         if snap.costText != nil {
-            height += Self.costSize(width) * line + 16
+            height += Self.costSize(width) * sizes.people * line + 16
         }
         if messageVisible {
-            height += (snap.costText == nil ? digit * 0.7 : 26) + Self.messageSize(width) * line
+            height += (snap.costText == nil ? digit * 0.7 : 26) + messageLineSize(width: width) * line
         }
         return size.height * 0.88 / max(height, 1)
     }
 
+    /// `requested` (the ⌘+/⌘- zoom, at least 25%) held to what fits the window's height. A
+    /// timer whose sizes are above 100% shrinks back as far as it must to fit, but never below
+    /// how the standard sizes would look, so a window too small even for those stays as it was.
+    func fittedZoom(requested: CGFloat) -> CGFloat {
+        let fit = fitZoom()
+        var standard = config
+        standard.sizes = TimerSizes()
+        let standardFit = CountdownStage(snap: snap, config: standard, palette: palette, size: size).fitZoom()
+        let floor = min(1, fit / max(standardFit, 0.0001))
+        return min(max(requested, 0.25), max(floor, fit))
+    }
+
     var body: some View {
         let width = size.width
-        let digitSize = baseDigitSize(width: width) * scale
+        let digitSize = self.digitSize(width: width) * scale
 
         return VStack(spacing: 0) {
             if snap.isOvertime {
-                overtimeLabel(size: Self.overtimeLabelSize(width) * scale)
+                overtimeLabel(size: Self.overtimeLabelSize(width) * sizes.done * scale)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
 
@@ -73,14 +109,18 @@ struct CountdownStage: View {
 
             if let cost = snap.costText {
                 Text(cost)
-                    .font(.inter(Self.costSize(width) * scale))
+                    .font(.inter(Self.costSize(width) * sizes.people * scale))
                     .foregroundStyle(palette.accentSoft)
                     .multilineTextAlignment(.center)
                     .padding(.top, 16 * scale)
                     .transition(.opacity)
             }
 
-            messages(size: Self.messageSize(width) * scale, gap: snap.costText == nil ? digitSize * 0.7 : 26 * scale)
+            messages(
+                leadSize: Self.messageSize(width) * 0.75 * sizes.lead * scale,
+                warningSize: Self.messageSize(width) * sizes.warning * scale,
+                gap: snap.costText == nil ? digitSize * 0.7 : 26 * scale
+            )
         }
         // When the warning appears below digits that were alone, they glide up to make room.
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: messageVisible)
@@ -107,7 +147,7 @@ struct CountdownStage: View {
     }
 
     private func digits(size: CGFloat, maxWidth: CGFloat) -> some View {
-        let isDoneText = snap.isExpired && !snap.isOvertime
+        let isDoneText = self.isDoneText
         // Plain values, not `self`, because the animator's closure isn't main-actor isolated.
         let isFinal = snap.isFinal
         let reduce = reduceMotion
@@ -161,22 +201,22 @@ struct CountdownStage: View {
     /// Lead and warning text share one cell and cross-fade at 15 seconds, so swapping one for
     /// the other never shifts the digits. With nothing to show, the cell isn't there at all.
     @ViewBuilder
-    private func messages(size: CGFloat, gap: CGFloat) -> some View {
+    private func messages(leadSize: CGFloat, warningSize: CGFloat, gap: CGFloat) -> some View {
         let lead = config.leadText
         let warning = config.warningText
         if messageVisible {
             ZStack {
                 if let lead = lead {
                     Text(lead)
-                        .font(.inter(size * 0.75, .medium))
+                        .font(.inter(leadSize, .medium))
                         .foregroundStyle(palette.textSoft)
                         .opacity(showsWarning ? 0 : 1)
                         .offset(y: showsWarning ? -12 : 0)
                 }
                 if !warning.isEmpty {
                     Text(warning)
-                        .font(.inter(size, .semibold))
-                        .tracking(-size * 0.01)
+                        .font(.inter(warningSize, .semibold))
+                        .tracking(-warningSize * 0.01)
                         .foregroundStyle(palette.text)
                         .opacity(showsWarning ? 1 : 0)
                         .offset(y: showsWarning ? 0 : 12)

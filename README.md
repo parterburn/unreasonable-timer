@@ -54,8 +54,10 @@ untimer://open?time=300        # opens paused
 
 `time` is in seconds (1 to 86,400). `text` is the text at 15 seconds left (an empty `text=`
 means none). `over=0` stops at zero. `people` is 1 to 10,000. `theme=light` selects light mode.
-The Mac app also reads `accent=E8743B` (accent color), `sound=none|classic|singing-bowl|marimba`
-and `chime15=1` (also chime at 15 seconds left); the web page ignores them.
+The Mac app also reads `accent=E8743B` (accent color), `sound=none|classic|singing-bowl|marimba`,
+`chime15=1` (also chime at 15 seconds left) and text sizes in percent, 50 to 200: `timersize`,
+`leadsize`, `textsize` (the text at 15 seconds left), `donesize` and `peoplesize`. The web page
+ignores them.
 
 ### Shortcuts, Spotlight and the global shortcut
 

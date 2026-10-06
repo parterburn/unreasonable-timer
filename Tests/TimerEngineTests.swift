@@ -452,6 +452,26 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.summary.hasSuffix("Singing bowl"))
     }
 
+    func testSizesDefaultToStandardAndStayInRange() {
+        XCTAssertTrue(TimerConfig(seconds: 60).sizes.isStandard)
+        let sizes = TimerSizes(timer: 400, lead: 10, warning: 120, done: 50, people: 200)
+        XCTAssertEqual(sizes, TimerSizes(timer: 200, lead: 50, warning: 120, done: 50, people: 200))
+        XCTAssertFalse(sizes.isStandard)
+    }
+
+    func testSizesRoundTripAndOlderTimersLoadAtStandardSize() throws {
+        let config = TimerConfig(seconds: 90, sizes: TimerSizes(timer: 130, lead: 80, done: 150))
+        let decoded = try JSONDecoder().decode(TimerConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded.sizes, config.sizes)
+
+        let old = #"{"seconds": 300, "doneText": "Stop"}"#
+        XCTAssertTrue(try JSONDecoder().decode(TimerConfig.self, from: Data(old.utf8)).sizes.isStandard)
+        // Missing sizes are 100%, and saved sizes outside the range are held to it.
+        let partial = #"{"seconds": 300, "sizes": {"timer": 900, "warning": 70}}"#
+        let sizes = try JSONDecoder().decode(TimerConfig.self, from: Data(partial.utf8)).sizes
+        XCTAssertEqual(sizes, TimerSizes(timer: 200, warning: 70))
+    }
+
     func testClamping() {
         XCTAssertEqual(TimerConfig(seconds: 0).seconds, 1)
         XCTAssertEqual(TimerConfig(seconds: -50).seconds, 1)
@@ -581,6 +601,12 @@ final class LinkParsingTests: XCTestCase {
         XCTAssertEqual(plain.sound, .classic)
         XCTAssertFalse(plain.chimeAtWarning)
         XCTAssertEqual(TimerConfig(link: "untimer://start?time=60&sound=none")?.sound, TimerSound.none)
+    }
+
+    func testLinkSizes() throws {
+        let config = try XCTUnwrap(TimerConfig(link: "untimer://open?time=60&timersize=140&leadsize=80&textsize=120&donesize=300&peoplesize=abc"))
+        XCTAssertEqual(config.sizes, TimerSizes(timer: 140, lead: 80, warning: 120, done: 200, people: 100))
+        XCTAssertTrue(try XCTUnwrap(TimerConfig(link: "https://x.test/timer?time=60")).sizes.isStandard)
     }
 
     func testTrailingSlashAndCurlyQuotes() throws {

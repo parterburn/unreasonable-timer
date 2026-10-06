@@ -315,12 +315,10 @@ struct CountdownView: View {
 
     // MARK: Zoom
 
-    /// ⌘+/⌘- scale everything on the stage. Zooming out always applies; zooming in stops once
-    /// the stage would no longer fit the window's height.
+    /// ⌘+/⌘- scale everything on the stage. Zooming in stops once the stage would no longer fit
+    /// the window's height (see `CountdownStage.fittedZoom`).
     private func effectiveZoom(in size: CGSize) -> CGFloat {
-        let requested = CGFloat(zoom)
-        guard requested > 1 else { return max(requested, 0.25) }
-        return min(requested, max(1, fitZoom(in: size)))
+        CountdownStage(snap: snap, config: config, palette: palette, size: size).fittedZoom(requested: CGFloat(zoom))
     }
 
     /// The largest zoom at which the stage's current contents fit the window's height.

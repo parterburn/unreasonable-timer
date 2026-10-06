@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TimerCore
 
@@ -19,6 +20,7 @@ private struct Draft: Equatable {
     var accent: String
     var sound: TimerSound
     var chimeAtWarning: Bool
+    var sizes: TimerSizes
 
     init(config: TimerConfig) {
         minutes = String(format: "%02d", config.seconds / 60)
@@ -32,6 +34,7 @@ private struct Draft: Equatable {
         accent = config.accent ?? TimerConfig.defaultAccent
         sound = config.sound
         chimeAtWarning = config.chimeAtWarning
+        sizes = config.sizes
     }
 
     var totalSeconds: Int { (Int(minutes) ?? 0) * 60 + (Int(seconds) ?? 0) }
@@ -56,7 +59,8 @@ private struct Draft: Equatable {
             theme: theme,
             accent: accent,
             sound: sound,
-            chimeAtWarning: chimeAtWarning
+            chimeAtWarning: chimeAtWarning,
+            sizes: sizes
         )
     }
 }
@@ -83,6 +87,8 @@ struct SetupView: View {
     @State private var previewMoment = PreviewMoment(rawValue: UserDefaults.standard.string(forKey: "UTPreviewMoment") ?? "") ?? .start
     @State private var saveName = ""
     @FocusState private var focus: SetupField?
+    /// Sees ↑/↓ before the focused text field does; see `installArrowKeys`.
+    @State private var arrowMonitor: Any?
     @ObservedObject private var chimes = ChimePlayer.shared
 
     private static let quickMinutes = [1, 3, 5, 10, 15, 30, 60]
@@ -119,6 +125,7 @@ struct SetupView: View {
         }
         .tint(accent.color)
         .onAppear {
+            installArrowKeys()
             consumePrefill()
             // AppKit focuses the first text field on its own, selecting the minutes; start with
             // nothing focused so the form reads as a whole first.
@@ -149,8 +156,17 @@ struct SetupView: View {
             }
         }
         .onChange(of: draft.countOver) { previewMoment = .end }
+        .onChange(of: draft.sizes) { old, new in
+            if new.lead != old.lead { previewMoment = .start }
+            if new.warning != old.warning { previewMoment = .warning }
+            if new.done != old.done || new.people != old.people { previewMoment = .end }
+        }
         .onChange(of: draft.sound) { chimes.stop() }
-        .onDisappear { chimes.stop() }
+        .onDisappear {
+            chimes.stop()
+            if let monitor = arrowMonitor { NSEvent.removeMonitor(monitor) }
+            arrowMonitor = nil
+        }
         .alert("Name this timer", isPresented: $showSaveAlert) {
             TextField("Name", text: $saveName)
             Button("Save") { saveCurrent() }
@@ -294,25 +310,28 @@ struct SetupView: View {
             }
 
             FormSection("Text") {
-                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength)
-                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength)
-                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength)
+                textField("Under the timer", text: $draft.lead, prompt: "Optional", field: .lead, limit: TimerConfig.maxLeadLength, size: $draft.sizes.lead)
+                textField("At 15 seconds left", text: $draft.warning, prompt: "Optional", field: .warning, limit: TimerConfig.maxWarningLength, size: $draft.sizes.warning)
+                textField("At zero", text: $draft.done, prompt: TimerConfig.defaultDoneText, field: .done, limit: TimerConfig.maxDoneLength, size: $draft.sizes.done)
             } footer: {
-                Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. Paste a /timer link into any field to fill in the whole form.")
+                Text("The text under the timer gives way to the 15-second text, and the zero text appears when time is up. The percentages set each one’s size. Paste a /timer link into any field to fill in the whole form.")
             }
 
             FormSection("When time is up") {
                 FormToggle("Count up after zero", isOn: $draft.countOver)
                 FormRow("Number of people in the room") {
-                    TextField("Number of people in the room", text: $draft.people, prompt: Text("Optional"))
-                        .labelsHidden()
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.trailing)
-                        .focused($focus, equals: .people)
-                        .onChange(of: draft.people) { _, new in
-                            let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
-                            if digits != new { draft.people = digits }
-                        }
+                    HStack(spacing: 10) {
+                        TextField("Number of people in the room", text: $draft.people, prompt: Text("Optional"))
+                            .labelsHidden()
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focus, equals: .people)
+                            .onChange(of: draft.people) { _, new in
+                                let digits = String(new.filter { $0.isASCII && $0.isNumber }.prefix(5))
+                                if digits != new { draft.people = digits }
+                            }
+                        SizeStepper(title: "Size of the people waiting line", percent: $draft.sizes.people)
+                    }
                 }
             } footer: {
                 Text("With the number of people set, the overtime shows how much of the room’s time is going by.")
@@ -327,6 +346,9 @@ struct SetupView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                }
+                FormRow("Timer size") {
+                    SizeStepper(title: "Size of the timer", percent: $draft.sizes.timer)
                 }
                 FormRow("Accent color") {
                     AccentPicker(hex: $draft.accent, swatchSize: 15)
@@ -448,6 +470,53 @@ struct SetupView: View {
         }
     }
 
+    /// ↑/↓ in the minutes, seconds or people field step its number by one (holding repeats), as
+    /// in a stepper. A text field's editor would take the arrows to move the caret, so a local
+    /// monitor sees them first, and only acts while one of those fields is being edited.
+    private func installArrowKeys() {
+        guard arrowMonitor == nil else { return }
+        arrowMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let delta: Int
+            switch event.keyCode {
+            case 126: delta = 1    // ↑
+            case 125: delta = -1   // ↓
+            default: return event
+            }
+            guard event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
+                  let window = event.window, window === controller.mainWindow,
+                  window.firstResponder is NSTextView,   // a field is being edited, not an alert's
+                  let field = focus, stepNumber(in: field, by: delta)
+            else { return event }
+            return nil
+        }
+    }
+
+    /// Steps the number in `field`; false for fields that aren't numbers. Seconds carry into
+    /// minutes (0:59 then 1:00), and the time stays within 0 and the longest timer.
+    private func stepNumber(in field: SetupField, by step: Int) -> Bool {
+        switch field {
+        case .minutes, .seconds:
+            let minutes = Int(draft.minutes) ?? 0
+            var total = minutes * 60 + (Int(draft.seconds) ?? 0)
+            if field == .minutes {
+                guard minutes + step >= 0 else { return true }
+                total += step * 60
+            } else {
+                total += step
+            }
+            total = min(max(total, 0), TimerConfig.maxSeconds)
+            draft.minutes = String(format: "%02d", total / 60)
+            draft.seconds = String(format: "%02d", total % 60)
+            return true
+        case .people:
+            let people = min(max((Int(draft.people) ?? 0) + step, 0), TimerConfig.maxPeople)
+            draft.people = people == 0 ? "" : String(people)
+            return true
+        case .done, .lead, .warning:
+            return false
+        }
+    }
+
     /// Carries overflow (90 seconds becomes 1:30) and re-pads the two fields.
     private func normalizeTime() {
         let total = min(draft.totalSeconds, TimerConfig.maxSeconds)
@@ -481,23 +550,26 @@ struct SetupView: View {
 
     // MARK: Text
 
-    private func textField(_ label: String, text: Binding<String>, prompt: String, field: SetupField, limit: Int) -> some View {
+    private func textField(_ label: String, text: Binding<String>, prompt: String, field: SetupField, limit: Int, size: Binding<Int>) -> some View {
         FormRow(label) {
-            TextField(label, text: text, prompt: Text(prompt))
-                .labelsHidden()
-                .textFieldStyle(.plain)
-                .multilineTextAlignment(.trailing)
-                .focused($focus, equals: field)
-                .onChange(of: text.wrappedValue) { old, new in
-                    if let linked = timerLink(in: new) {
-                        // A pasted /timer link fills the whole form instead of landing in this field.
-                        text.wrappedValue = old
-                        draft = Draft(config: linked)
-                        selection = nil
-                    } else if new.count > limit {
-                        text.wrappedValue = String(new.prefix(limit))
+            HStack(spacing: 10) {
+                TextField(label, text: text, prompt: Text(prompt))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
+                    .focused($focus, equals: field)
+                    .onChange(of: text.wrappedValue) { old, new in
+                        if let linked = timerLink(in: new) {
+                            // A pasted /timer link fills the whole form instead of landing in this field.
+                            text.wrappedValue = old
+                            draft = Draft(config: linked)
+                            selection = nil
+                        } else if new.count > limit {
+                            text.wrappedValue = String(new.prefix(limit))
+                        }
                     }
-                }
+                SizeStepper(title: "Size of the text \(label.lowercased())", percent: size)
+            }
         }
     }
 
@@ -595,6 +667,39 @@ private struct SidebarRow: View {
     }
 }
 
+/// A text size as a percentage, with arrows that step it by 10%. Grey at 100%, so a changed
+/// size stands out.
+private struct SizeStepper: View {
+    let title: String
+    @Binding var percent: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("\(percent)%")
+                .monospacedDigit()
+                .foregroundStyle(percent == 100 ? .secondary : .primary)
+                .frame(minWidth: 42, alignment: .trailing)
+            Stepper(title, value: $percent, in: TimerSizes.range, step: TimerSizes.step)
+                .labelsHidden()
+        }
+        .help("\(title): \(percent)% of the usual size")
+        .contextMenu {
+            Button("Reset to 100%") { percent = 100 }
+                .disabled(percent == 100)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue("\(percent) percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: percent = min(percent + TimerSizes.step, TimerSizes.range.upperBound)
+            case .decrement: percent = max(percent - TimerSizes.step, TimerSizes.range.lowerBound)
+            @unknown default: break
+            }
+        }
+    }
+}
+
 /// The 1 / 3 / 5 … minute buttons; the one matching the current duration is filled.
 private struct QuickDurationStyle: ButtonStyle {
     let selected: Bool
@@ -657,11 +762,13 @@ private struct CountdownPreview: View {
         let palette = Palette.make(config.theme, accent: AccentColor(config: config))
         let snap = snapshot
         let canvas = Self.canvas
+        // At 100% zoom, as a timer opens; large text sizes shrink to fit as they would there.
+        let zoom = CountdownStage(snap: snap, config: config, palette: palette, size: canvas).fittedZoom(requested: 1)
         GeometryReader { geo in
             ZStack {
                 TimerBackground(palette: palette)
                 HeatGlow(palette: palette, heat: snap.heat, expired: snap.isExpired)
-                CountdownStage(snap: snap, config: config, palette: palette, size: canvas)
+                CountdownStage(snap: snap, config: config, palette: palette, size: canvas, scale: zoom)
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
                     ZStack(alignment: .leading) {
