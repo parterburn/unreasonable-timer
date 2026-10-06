@@ -58,12 +58,29 @@ launch() { # [extra launch arguments...]
 launch
 capture setup-1-light
 
+capture_screen() { # <name>: the whole screen, for menus that are their own windows
+  screencapture -x "$OUT/$1.png"
+  sips -s format jpeg -s formatOptions 82 "$OUT/$1.png" --out "$OUT/$1.jpg" >/dev/null
+  rm "$OUT/$1.png"
+  echo "captured $1"
+}
+
 open "untimer://open?time=20&lead=$LEAD&people=12"
 sleep 3
 capture countdown-1-paused
 
+# Right-click: the countdown's menu, each item with its key. Esc closes the menu.
+read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
+"$CLICK_TOOL" right $((WX + WW / 2)) $((WY + WH / 3))
+sleep 1;  capture_screen countdown-1b-right-click-menu
+"$HOLD_KEY_TOOL" escape 0
+sleep 1
+
 open "untimer://start?time=20&lead=$LEAD&people=12"
 sleep 3;  capture countdown-2-running    # ~17 left
+# Esc while counting only asks; the timer keeps going.
+"$HOLD_KEY_TOOL" escape 0
+sleep 0.6; capture countdown-2b-esc-asks-before-editing
 sleep 5;  capture countdown-3-warning    # ~11 left
 sleep 6;  capture countdown-4-final      # ~5 left
 sleep 32; capture countdown-5-overtime   # ~+27

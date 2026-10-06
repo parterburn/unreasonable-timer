@@ -2,21 +2,23 @@
 // or scrolls there. For scripts/ci-screenshots.sh.
 //   swiftc scripts/click.swift -o click
 //   ./click 300 650              click
+//   ./click right 300 650        right-click
 //   ./click scroll 512 400 -40   scroll down 40 lines
 import CoreGraphics
 import Foundation
 
 var args = Array(CommandLine.arguments.dropFirst())
 let scrolling = args.first == "scroll"
-if scrolling { args.removeFirst() }
+let rightClick = args.first == "right"
+if scrolling || rightClick { args.removeFirst() }
 guard args.count == (scrolling ? 3 : 2), let x = Double(args[0]), let y = Double(args[1]) else {
-    FileHandle.standardError.write(Data("usage: click <x> <y> | click scroll <x> <y> <lines>\n".utf8))
+    FileHandle.standardError.write(Data("usage: click [right] <x> <y> | click scroll <x> <y> <lines>\n".utf8))
     exit(2)
 }
 let point = CGPoint(x: x, y: y)
 
 func post(_ type: CGEventType) {
-    CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
+    CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: rightClick ? .right : .left)!
         .post(tap: .cghidEventTap)
 }
 
@@ -30,6 +32,10 @@ if scrolling, let lines = Int32(args[2]) {
         event.post(tap: .cghidEventTap)
         usleep(30_000)
     }
+} else if rightClick {
+    post(.rightMouseDown)
+    usleep(80_000)
+    post(.rightMouseUp)
 } else {
     post(.leftMouseDown)
     usleep(80_000)

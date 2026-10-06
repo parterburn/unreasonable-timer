@@ -9,8 +9,6 @@ struct CountdownView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var hasFocus: Bool
-    @State private var hoveringStage = false
-    @State private var hoveringHint = false
     @State private var isIdle = false
     @State private var idleTask: Task<Void, Never>?
     @State private var viewSize: CGSize = .zero
@@ -18,16 +16,15 @@ struct CountdownView: View {
     @State private var zoomLabelTask: Task<Void, Never>?
     /// Where the pointer is along the progress bar, while it is over it.
     @State private var barHoverX: CGFloat?
-    /// After time is up, the first click or Space only asks; a second one within a few
-    /// seconds resets. Easy to hit by accident otherwise (a stray click, a presenter remote).
-    @State private var resetArmed = false
-    @State private var resetArmTask: Task<Void, Never>?
+    /// An action that is easy to trigger by accident (a stray click, a presenter remote) and
+    /// costly to undo waits for a second press: reset after time is up, and Esc while counting.
+    @State private var armed: ArmedAction?
+    @State private var armTask: Task<Void, Never>?
     @AppStorage(AppSettings.countdownZoom) private var zoom = 1.0
 
     private var snap: TimerEngine.Snapshot { clock.snapshot }
     private var config: TimerConfig { controller.config }
     private var palette: Palette { Palette.make(config.theme, accent: AccentColor(config: config)) }
-    private var hintVisible: Bool { (hoveringStage || hoveringHint) && !isIdle }
 
     var body: some View {
         GeometryReader { geo in
@@ -41,15 +38,19 @@ struct CountdownView: View {
             .onChange(of: geo.size, initial: true) { _, size in viewSize = size }
         }
         .overlay(alignment: .top) { zoomBadge.animation(.easeInOut(duration: 0.2), value: zoomLabel) }
-        .overlay(alignment: .bottom) { resetPrompt.animation(.easeInOut(duration: 0.2), value: resetArmed) }
+        .overlay(alignment: .bottom) { armedPrompt.animation(.easeInOut(duration: 0.2), value: armed) }
         .onChange(of: snap.isExpired) { _, expired in
-            if !expired { disarmReset() }
+            if !expired && armed == .reset { disarm() }
+        }
+        .onChange(of: snap.isRunning) { _, running in
+            if !running && armed == .edit { disarm() }
         }
         .onChange(of: zoom) { zoomChanged() }
         // Edge to edge: the glow, vignette and flash cover the title bar area too.
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { primaryAction() }
+        .contextMenu { contextMenuItems }
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
@@ -104,11 +105,13 @@ struct CountdownView: View {
             primaryAction()
             return .handled
         case .escape:
+            // Fullscreen first, as everywhere on the Mac; then back to editing the timer.
             if controller.isFullscreen {
                 controller.togglePresentation()
-                return .handled
+            } else {
+                requestEdit()
             }
-            return .ignored
+            return .handled
         default:
             break
         }
@@ -125,7 +128,7 @@ struct CountdownView: View {
         }
     }
 
-    /// Shows the hint, cursor and window buttons on mouse movement; hides all three after 2.5
+    /// Shows the cursor and window buttons on mouse movement; hides both after 2.5
     /// seconds of stillness, so a presented timer is just the timer.
     private func wake() {
         if isIdle { controller.setWindowChromeVisible(true) }
@@ -148,29 +151,43 @@ struct CountdownView: View {
             controller.toggle()
             return
         }
-        if resetArmed {
-            disarmReset()
+        if armed == .reset {
+            disarm()
             controller.toggle()   // resets an expired timer
         } else {
-            resetArmed = true
-            resetArmTask?.cancel()
-            resetArmTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 3_500_000_000)
-                guard !Task.isCancelled else { return }
-                resetArmed = false
-            }
+            arm(.reset)
         }
     }
 
-    private func disarmReset() {
-        resetArmTask?.cancel()
-        resetArmed = false
+    /// Esc: back to editing the timer. While it is counting (down or up), only on the second press.
+    private func requestEdit() {
+        if !snap.isRunning || armed == .edit {
+            disarm()
+            controller.edit()
+        } else {
+            arm(.edit)
+        }
+    }
+
+    private func arm(_ action: ArmedAction) {
+        armed = action
+        armTask?.cancel()
+        armTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            guard !Task.isCancelled else { return }
+            armed = nil
+        }
+    }
+
+    private func disarm() {
+        armTask?.cancel()
+        armed = nil
     }
 
     @ViewBuilder
-    private var resetPrompt: some View {
-        if resetArmed {
-            Text("Click or press Space again to reset the timer")
+    private var armedPrompt: some View {
+        if let action = armed {
+            Text(action.prompt)
                 .font(.inter(15, .semibold))
                 .foregroundStyle(palette.text)
                 .padding(.horizontal, 16)
@@ -181,6 +198,39 @@ struct CountdownView: View {
                 .transition(.opacity.combined(with: .offset(y: 8)))
                 .allowsHitTesting(false)
         }
+    }
+
+    /// Right-click: everything the keys do, with each key shown beside its item. The shortcuts
+    /// on these items are for display (and for the open menu); the keys themselves are handled
+    /// in `handleKey`, which adds the second-press safety for reset and Esc.
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        if snap.isExpired {
+            Button("Reset") { controller.reset() }
+                .keyboardShortcut("r", modifiers: [])
+        } else {
+            Button(snap.isRunning ? "Pause" : "Start") { controller.toggle() }
+                .keyboardShortcut(.space, modifiers: [])
+            Button("Reset") { controller.reset() }
+                .keyboardShortcut("r", modifiers: [])
+        }
+        Divider()
+        Button("Add 15 Seconds") { controller.adjust(by: TimerEngine.adjustStep) }
+            .keyboardShortcut(.upArrow, modifiers: [])
+        Button("Remove 15 Seconds") { controller.adjust(by: -TimerEngine.adjustStep) }
+            .keyboardShortcut(.downArrow, modifiers: [])
+        Divider()
+        Button("Zoom In") { CountdownZoom.zoomIn() }
+            .keyboardShortcut("+", modifiers: .command)
+        Button("Zoom Out") { CountdownZoom.zoomOut() }
+            .keyboardShortcut("-", modifiers: .command)
+        Button("Actual Size") { CountdownZoom.reset() }
+            .keyboardShortcut("0", modifiers: .command)
+        Divider()
+        Button(controller.isFullscreen ? "Exit Fullscreen" : "Present Fullscreen") { controller.togglePresentation() }
+            .keyboardShortcut("f", modifiers: [])
+        Button("Edit Timer") { controller.edit() }
+            .keyboardShortcut(.escape, modifiers: [])
     }
 
     // MARK: Progress bar
@@ -327,33 +377,17 @@ struct CountdownView: View {
             scale: effectiveZoom(in: size),
             tickToken: clock.tickToken
         )
-        .overlay(alignment: .bottom) {
-            // Hangs just below the stage, like the web hint anchored to `top: 100%`.
-            hint.alignmentGuide(.bottom) { $0[.top] }
-        }
-        .onHover { hoveringStage = $0 }
     }
+}
 
-    private var hint: some View {
-        HStack(spacing: 0) {
-            Text("Click or Space to start/pause · ↑/↓ ±15s · R to reset · F for fullscreen · ")
-            Button {
-                controller.edit()
-            } label: {
-                Text("Edit").underline()
-            }
-            .buttonStyle(.plain)
-            .disabled(!hintVisible)
+/// See `CountdownView.armed`.
+private enum ArmedAction {
+    case reset, edit
+
+    var prompt: String {
+        switch self {
+        case .reset: return "Click or press Space again to reset the timer"
+        case .edit: return "Press Esc again to stop the timer and edit it"
         }
-        .font(.inter(13.6))
-        .foregroundStyle(palette.accentSoft)
-        .lineLimit(1)
-        .fixedSize()
-        .padding(.top, 20)
-        .contentShape(Rectangle())
-        .onTapGesture { primaryAction() }
-        .onHover { hoveringHint = $0 }
-        .opacity(hintVisible ? 1 : 0)
-        .animation(.easeInOut(duration: 0.3), value: hintVisible)
     }
 }

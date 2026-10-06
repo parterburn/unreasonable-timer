@@ -22,12 +22,13 @@ open it straight away. The countdown keeps the web page's look.
 | ↑ / ↓ | Add / remove 15 seconds; hold to keep going (holding ↓ stops just above zero) |
 | R | Reset |
 | F | Fullscreen on the selected display |
-| Esc | Leave fullscreen |
+| Esc | Leave fullscreen; otherwise back to editing the timer (while counting, press twice) |
 | ⌘+ / ⌘- / ⌘0 | Zoom the countdown in / out / back to actual size (⌘= works too) |
 | ⌘E | Back to the setup form |
 
 Click or drag along the progress bar to jump to that point; hovering it shows the time.
-Move the mouse to show the hint line; it and the cursor hide after 2.5 seconds of stillness.
+Right-click the countdown for a menu of all of these, with their keys. The cursor and window
+buttons hide after 2.5 seconds of stillness.
 
 ### Saved timers
 

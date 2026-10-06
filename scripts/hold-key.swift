@@ -6,10 +6,10 @@
 import CoreGraphics
 import Foundation
 
-let codes: [String: CGKeyCode] = ["up": 126, "down": 125, "equals": 24, "minus": 27, "zero": 29]
+let codes: [String: CGKeyCode] = ["up": 126, "down": 125, "equals": 24, "minus": 27, "zero": 29, "escape": 53]
 let args = CommandLine.arguments
 guard args.count >= 3, let code = codes[args[1]], let repeats = Int(args[2]) else {
-    FileHandle.standardError.write(Data("usage: hold-key up|down|equals|minus|zero <repeats> [cmd]\n".utf8))
+    FileHandle.standardError.write(Data("usage: hold-key up|down|equals|minus|zero|escape <repeats> [cmd]\n".utf8))
     exit(2)
 }
 let flags: CGEventFlags = args.dropFirst(3).contains("cmd") ? .maskCommand : []
