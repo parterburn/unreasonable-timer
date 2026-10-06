@@ -31,7 +31,7 @@ struct MenuBarView: View {
             Button(controller.isRunning ? "Pause" : "Start") { controller.toggle() }
             Button("Add 15 Seconds") { controller.adjust(by: TimerEngine.adjustStep) }
             Button("Remove 15 Seconds") { controller.adjust(by: -TimerEngine.adjustStep) }
-            Button("Reset") { controller.reset() }
+            Button(controller.resetTitle) { controller.reset() }
             Divider()
         }
 

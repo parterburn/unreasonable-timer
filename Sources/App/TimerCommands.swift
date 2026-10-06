@@ -41,7 +41,7 @@ struct TimerCommands: Commands {
         CommandMenu("Timer") {
             Button(controller.isRunning ? "Pause" : "Start") { controller.toggle() }
                 .disabled(!controller.hasTimer)
-            Button("Reset") { controller.reset() }
+            Button(controller.hasTimer ? controller.resetTitle : "Reset") { controller.reset() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!controller.hasTimer)
             Button("Add 15 Seconds") { controller.adjust(by: TimerEngine.adjustStep) }

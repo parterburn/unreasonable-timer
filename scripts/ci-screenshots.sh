@@ -84,6 +84,7 @@ capture countdown-1-paused
 read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
 "$CLICK_TOOL" right $((WX + WW / 2)) $((WY + WH / 3))
 sleep 1;  capture_screen countdown-1b-right-click-menu
+check "the right-click menu offers Reset to 0:20" sh -c "'$AX_FIND_TOOL' '$NAME' AXMenuItem 'Reset to 0:20' >/dev/null"
 "$HOLD_KEY_TOOL" escape 0
 sleep 1
 
