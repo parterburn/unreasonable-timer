@@ -217,6 +217,56 @@ extension TimerConfig {
     }
 }
 
+// MARK: - Sharing
+
+extension TimerConfig {
+    /// The Eco web timer. Shared links point here: the Mac app opens them where it's installed
+    /// (as universal links), and the web page runs them everywhere else.
+    public static let webTimerURL = "https://unreasonable.eco/timer"
+
+    /// A link to this timer on the Eco web page, with its params as the web form writes them
+    /// (time, text, lead, done, over, people, theme), then the Mac app's own where they aren't
+    /// the default (accent, sound, chime15, sizes), which the web page ignores, and `name`.
+    public func shareLink(name: String? = nil) -> String {
+        var params: [(String, String)] = [("time", String(seconds)), ("text", warningText)]
+        if let lead = leadText { params.append(("lead", lead)) }
+        if doneText != TimerConfig.defaultDoneText { params.append(("done", doneText)) }
+        if !countOver { params.append(("over", "0")) }
+        if let people = people { params.append(("people", String(people))) }
+        if theme == .light { params.append(("theme", "light")) }
+        if let accent = accent { params.append(("accent", String(accent.dropFirst()))) }
+        if sound != .classic { params.append(("sound", sound.rawValue)) }
+        if chimeAtWarning { params.append(("chime15", "1")) }
+        let sizeParams = [
+            ("timersize", sizes.timer), ("leadsize", sizes.lead), ("textsize", sizes.warning),
+            ("donesize", sizes.done), ("peoplesize", sizes.people),
+        ]
+        for (param, percent) in sizeParams where percent != 100 {
+            params.append((param, String(percent)))
+        }
+        if let name = name.map({ TimerConfig.clean($0, limit: 80) }), !name.isEmpty {
+            params.append(("name", name))
+        }
+        let query = params.map { "\($0)=\(TimerConfig.encode($1))" }.joined(separator: "&")
+        return TimerConfig.webTimerURL + "?" + query
+    }
+
+    /// The value of `param` in a `/timer` or `untimer://` link, decoded as the web page does.
+    public static func parameter(_ param: String, inLink link: String) -> String? {
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed) else { return nil }
+        return decodeQuery(components.percentEncodedQuery ?? "").last { $0.name == param }?.value
+    }
+
+    /// Percent-encodes everything but letters, digits and `-._~`, so `&`, `=`, `+` and `#` in
+    /// a text survive the trip.
+    static func encode(_ value: String) -> String {
+        var allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+}
+
 // MARK: - Parsing /timer URLs
 
 extension TimerConfig {

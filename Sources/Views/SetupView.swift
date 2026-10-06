@@ -249,14 +249,18 @@ struct SetupView: View {
         .listStyle(.sidebar)
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let item = items.first, let config = config(for: item) {
+                let name = savedName(for: item)
                 Button("Open Timer") { controller.open(config, autostart: false) }
                 if case .recent = item {
                     Button("Save as Timer…") {
                         selection = item
-                        saveName = ""
+                        saveName = controller.suggestedName(for: config) ?? ""
                         showSaveAlert = true
                     }
                 }
+                Divider()
+                Button("Copy Link") { controller.copyLink(for: config, name: name) }
+                ShareLink("Share…", item: controller.shareLink(for: config, name: name))
                 if case .saved(let id) = item, let preset = store.presets.first(where: { $0.id == id }) {
                     Divider()
                     Button("Delete “\(preset.name)”", role: .destructive) {
@@ -315,6 +319,12 @@ struct SetupView: View {
                 .background(.bar)
                 .overlay(alignment: .top) { Divider() }
             }
+    }
+
+    /// The saved timer's name, which its shared link carries.
+    private func savedName(for item: SidebarItem) -> String? {
+        guard case .saved(let id) = item else { return nil }
+        return store.presets.first { $0.id == id }?.name
     }
 
     private func config(for item: SidebarItem) -> TimerConfig? {
@@ -641,7 +651,7 @@ struct SetupView: View {
     private var actionBar: some View {
         HStack(spacing: 10) {
             Button("Save as Timer…") {
-                saveName = selectedPreset?.name ?? ""
+                saveName = selectedPreset?.name ?? controller.suggestedName(for: draft.makeConfig()) ?? ""
                 showSaveAlert = true
             }
             .disabled(draft.makeConfig() == nil)
@@ -649,6 +659,8 @@ struct SetupView: View {
             if let preset = selectedPreset, let config = draft.makeConfig(), config != preset.config {
                 Button("Update “\(preset.name)”") { store.update(preset, config: config) }
             }
+
+            shareMenu
 
             Spacer()
 
@@ -667,6 +679,24 @@ struct SetupView: View {
         .padding(.vertical, 12)
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// Copy or share a link to the timer as it stands in the form, under its saved name.
+    @ViewBuilder
+    private var shareMenu: some View {
+        let config = draft.makeConfig()
+        Menu {
+            if let config = config {
+                Button("Copy Link") { controller.copyLink(for: config, name: selectedPreset?.name) }
+                ShareLink("Share…", item: controller.shareLink(for: config, name: selectedPreset?.name))
+            }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(config == nil)
+        .help("Copy or share a link to this timer. It opens in the Mac app where that's installed, and on the Eco web page everywhere else.")
     }
 
     private func start() {

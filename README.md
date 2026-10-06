@@ -59,6 +59,41 @@ The Mac app also reads `accent=E8743B` (accent color), `sound=none|classic|singi
 `leadsize`, `textsize` (the text at 15 seconds left), `donesize` and `peoplesize`. The web page
 ignores them.
 
+### Sharing a timer
+
+Right-click a timer in the sidebar (or the countdown) and choose **Copy Link** or **Share…**, or
+use the Share button at the bottom of the setup screen. The link points at the Eco web timer,
+`https://unreasonable.eco/timer?time=…`, with the timer's text, sizes, accent and sound, and the
+saved timer's name:
+
+- On a Mac with the app, it opens in the app, paused, once shared links are set up below
+  (Safari, Mail, Messages and other apps that hand universal links to apps; Chrome and other
+  browsers open the web page). "Save as Timer…" then suggests the shared name.
+- Everywhere else it opens the web timer, which reads the same params and ignores the Mac-only
+  ones.
+
+#### Shared links: opening them in the app
+
+macOS only opens an https link in an app when the app is signed with that domain (Associated
+Domains) and the domain lists the app. Three one-time steps:
+
+1. In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources),
+   open the App ID `com.unreasonablegroup.timer` (create it, as a macOS App ID, if it isn't
+   there) and turn on **Associated Domains**.
+2. Under Profiles, add a **Developer ID** distribution profile for that App ID and the Developer
+   ID Application certificate, download it, and add it to the `release` environment:
+   `base64 -i Unreasonable_Timer.provisionprofile | gh secret set DEVELOPER_ID_PROFILE --env release --repo unreasonable/timer`.
+   (It isn't sensitive: it ships inside every copy of the app.) On a Mac, set
+   `PROVISIONING_PROFILE=<path>` for `scripts/release.sh` instead.
+3. Serve `https://unreasonable.eco/.well-known/apple-app-site-association` from Eco, listing
+   `B79A4CAS56.com.unreasonablegroup.timer` for `/timer?time=…`. The change for Eco, including an
+   "Open in Mac app" link on the web timer for browsers that don't hand links to apps, is in
+   [docs/eco-shared-links.md](docs/eco-shared-links.md).
+
+The next release embeds the profile (its log shows `Associated domains: applinks:unreasonable.eco`)
+and checks that the signed app still launches before publishing. Apple's CDN caches the
+association file, so a change there can take a day to reach Macs.
+
 ### Shortcuts, Spotlight and the global shortcut
 
 - **Shortcuts / Spotlight:** *Start Saved Timer*, *Start Timer* (N minutes) and *Pause or Resume

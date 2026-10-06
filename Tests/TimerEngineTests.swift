@@ -620,6 +620,40 @@ final class LinkParsingTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(TimerConfig(link: "https://x.test/timer?time=60")).sizes.isStandard)
     }
 
+    func testShareLinkMatchesTheWebForm() {
+        XCTAssertEqual(
+            TimerConfig(seconds: 600).shareLink(),
+            "https://unreasonable.eco/timer?time=600&text=Please%20take%20your%20seats."
+        )
+        XCTAssertEqual(
+            TimerConfig(seconds: 90, warningText: "", doneText: "Stop", countOver: false, people: 12, theme: .light).shareLink(),
+            "https://unreasonable.eco/timer?time=90&text=&done=Stop&over=0&people=12&theme=light"
+        )
+    }
+
+    func testShareLinkRoundTripsEverything() throws {
+        let config = TimerConfig(
+            seconds: 1200,
+            leadText: "Q&A: 50% off + more #1 = “fun”",
+            warningText: "Wrap up?",
+            doneText: "Time’s up!",
+            countOver: false,
+            people: 40,
+            theme: .light,
+            accent: "#6926E3",
+            sound: .singingBowl,
+            chimeAtWarning: true,
+            sizes: TimerSizes(timer: 150, lead: 80, done: 120)
+        )
+        let link = config.shareLink(name: "Keynote & panel")
+        XCTAssertTrue(link.hasPrefix("https://unreasonable.eco/timer?time=1200&"))
+        XCTAssertEqual(TimerConfig(link: link), config)
+        XCTAssertEqual(TimerConfig.parameter("name", inLink: link), "Keynote & panel")
+        XCTAssertNil(TimerConfig.parameter("edit", inLink: link))
+        // Links the web form builds write spaces as "+".
+        XCTAssertEqual(TimerConfig.parameter("name", inLink: "https://unreasonable.eco/timer?time=60&name=Team+sync"), "Team sync")
+    }
+
     func testTrailingSlashAndCurlyQuotes() throws {
         XCTAssertEqual(TimerConfig(link: "https://x.test/timer/?time=60")?.seconds, 60)
         let config = try XCTUnwrap(TimerConfig(link: "https://x.test/timer?time=60&done=%E2%80%9CBye%E2%80%9D"))

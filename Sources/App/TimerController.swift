@@ -50,6 +50,9 @@ final class TimerController: ObservableObject {
     @Published var formPrefill: TimerConfig?
     /// The setup screen shows app settings instead of the timer form.
     @Published var showSettingsPane = false
+    /// The last timer opened from a shared link that carried a name, so "Save as Timer…" can
+    /// suggest it.
+    private(set) var sharedTimer: (config: TimerConfig, name: String)?
 
     let store: PresetStore
     let clock: ClockModel
@@ -97,18 +100,61 @@ final class TimerController: ObservableObject {
     }
 
     func handle(url: URL) {
-        guard url.scheme?.lowercased() == "untimer" else { return }
-        let host = url.host?.lowercased()
-        guard let linked = TimerConfig(link: url.absoluteString) else {
-            if host == "edit" { edit() }
-            showMainWindow()
+        let link = url.absoluteString
+        switch url.scheme?.lowercased() {
+        case "https", "http":
+            // A shared Eco link (https://unreasonable.eco/timer?…), opened here instead of in the
+            // browser: like the web page, it opens the countdown paused, or the form with edit=1.
+            guard let linked = TimerConfig(link: link) else { return showMainWindow() }
+            rememberSharedName(of: linked, in: link)
+            if TimerConfig.parameter("edit", inLink: link) != nil {
+                prefillForm(with: linked)
+            } else {
+                open(linked, autostart: false)
+            }
+        case "untimer":
+            let host = url.host?.lowercased()
+            guard let linked = TimerConfig(link: link) else {
+                if host == "edit" { edit() }
+                showMainWindow()
+                return
+            }
+            rememberSharedName(of: linked, in: link)
+            switch host {
+            case "edit": prefillForm(with: linked)   // untimer://edit?… opens the setup form filled in
+            case "open": open(linked, autostart: false)
+            default: open(linked, autostart: true)
+            }
+        default:
             return
         }
-        switch host {
-        case "edit": prefillForm(with: linked)   // untimer://edit?… opens the setup form filled in
-        case "open": open(linked, autostart: false)
-        default: open(linked, autostart: true)
+    }
+
+    private func rememberSharedName(of config: TimerConfig, in link: String) {
+        if let name = TimerConfig.parameter("name", inLink: link), !name.isEmpty {
+            sharedTimer = (config, name)
         }
+    }
+
+    /// The name to suggest when saving `config`: its saved name, or the name it was shared under.
+    func suggestedName(for config: TimerConfig?) -> String? {
+        guard let config = config else { return nil }
+        if let preset = store.presets.first(where: { $0.config == config }) { return preset.name }
+        if let shared = sharedTimer, shared.config == config { return shared.name }
+        return nil
+    }
+
+    // MARK: Sharing
+
+    /// A link anyone can open: in the Mac app where it's installed, on the Eco web page otherwise.
+    func shareLink(for config: TimerConfig, name: String? = nil) -> URL {
+        URL(string: config.shareLink(name: name ?? suggestedName(for: config)))!
+    }
+
+    func copyLink(for config: TimerConfig, name: String? = nil) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(shareLink(for: config, name: name).absoluteString, forType: .string)
     }
 
     /// Fills the setup form from a copied `/timer` or `untimer://` link.

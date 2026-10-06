@@ -10,6 +10,9 @@ name: Release
 #   NOTARY_KEY, NOTARY_KEY_ID, NOTARY_ISSUER_ID   App Store Connect API key for notarytool
 #     or NOTARY_APPLE_ID, NOTARY_PASSWORD         Apple ID and app-specific password instead
 #   SPARKLE_PRIVATE_KEY                           from `generate_keys -x <file>`
+#   DEVELOPER_ID_PROFILE (optional)               Developer ID provisioning profile with
+#                                                 Associated Domains, base64, so shared links open
+#                                                 in the app (README, "Shared links")
 on:
   workflow_dispatch:
 
@@ -123,7 +126,20 @@ jobs:
           gh release download --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir release/updates || true
           ls -l release/updates
 
+      - name: Provisioning profile (for shared links to open in the app)
+        env:
+          DEVELOPER_ID_PROFILE: ${{ secrets.DEVELOPER_ID_PROFILE }}
+        run: |
+          if [ -n "$DEVELOPER_ID_PROFILE" ]; then
+            printf '%s' "$DEVELOPER_ID_PROFILE" | base64 --decode > "$RUNNER_TEMP/developer-id.provisionprofile"
+            echo "PROVISIONING_PROFILE=$RUNNER_TEMP/developer-id.provisionprofile" >> "$GITHUB_ENV"
+          else
+            echo "No DEVELOPER_ID_PROFILE secret: shared links will open on the web, not in the app."
+          fi
+
       - name: Release
+        env:
+          LAUNCH_CHECK: "1"
         run: PUBLISH=1 scripts/release.sh
 
       - name: Check what was published

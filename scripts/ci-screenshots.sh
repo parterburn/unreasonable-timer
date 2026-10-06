@@ -202,6 +202,27 @@ else
   check "found the size box for the text under the timer" false
 fi
 
+# Sharing: Copy Link in the countdown's right-click menu puts a link to the Eco web timer on the
+# clipboard, carrying the timer; opening that link (as macOS does when a shared link is clicked)
+# brings the same timer up, paused.
+open "untimer://open?time=20&lead=$LEAD&people=12&accent=6926E3"
+sleep 3
+read -r WX WY WW WH <<<"$("$WINDOW_ID_TOOL" "$NAME" --bounds)"
+"$CLICK_TOOL" right $((WX + WW / 2)) $((WY + WH / 3))
+sleep 1
+"$AX_FIND_TOOL" "$NAME" AXMenuItem "Copy Link" press || "$HOLD_KEY_TOOL" escape 0
+sleep 0.5
+LINK="$(pbpaste)"
+echo "copied link: $LINK"
+check "Copy Link copies an unreasonable.eco/timer link with the timer in it" bash -c \
+  '[[ "$1" == "https://unreasonable.eco/timer?time=20&"* && "$1" == *"people=12"* && "$1" == *"accent=6926E3"* && "$1" == *"lead=Intro%3A%20our%20first%20speaker"* ]]' _ "$LINK"
+open "untimer://edit?time=600"
+sleep 3
+open -a "$APP" "$LINK"
+sleep 3
+capture share-1-opened-from-copied-link
+check "opening the copied link shows the countdown, not the form" bash -c "! '$AX_FIND_TOOL' '$NAME' AXTextField 1 >/dev/null 2>&1"
+
 # Another accent (Eco Purple) with the singing bowl: both belong to the timer, so a link sets them.
 ORANGE="accent=6926E3&sound=singing-bowl&chime15=1"
 launch -UTAppearance dark

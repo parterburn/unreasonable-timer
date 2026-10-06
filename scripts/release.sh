@@ -131,7 +131,20 @@ ARCHIVED_APP="$(find "$ARCHIVE/Products" -maxdepth 3 -name '*.app' -type d | hea
 [ -n "$ARCHIVED_APP" ] || fail "No .app found in $ARCHIVE/Products"
 mkdir -p "$EXPORT_DIR"
 ditto "$ARCHIVED_APP" "$APP"
-scripts/sign-app.sh "$APP" "$DEVELOPER_ID_APPLICATION"
+TEAM_ID="$TEAM_ID" scripts/sign-app.sh "$APP" "$DEVELOPER_ID_APPLICATION"
+
+# Catches a signature macOS won't run (a mismatched provisioning profile is killed at launch)
+# before anything is notarized or published. Off by default: on a Mac it opens a second copy.
+if [ "${LAUNCH_CHECK:-0}" = "1" ]; then
+  EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+  "$APP/Contents/MacOS/$EXECUTABLE" >/dev/null 2>&1 &
+  LAUNCHED=$!
+  sleep 8
+  kill -0 "$LAUNCHED" 2>/dev/null || fail "The signed app quit or was killed right after launch. Check its signature, entitlements and provisioning profile."
+  kill "$LAUNCHED" 2>/dev/null || true
+  wait "$LAUNCHED" 2>/dev/null || true
+  echo "  the signed app launched and ran for 8 seconds"
+fi
 
 notarize() { # <file>: submit, wait; notarytool exits non-zero if Apple rejects it
   xcrun notarytool submit "$1" "${NOTARY_ARGS[@]}" --wait

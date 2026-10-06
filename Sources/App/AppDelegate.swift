@@ -1,12 +1,26 @@
 import AppKit
 import TimerCore
 
-/// Closing the window leaves the app (and a running timer) alive in the Dock and menu bar, and
-/// supplies the Dock icon's right-click menu.
+/// Closing the window leaves the app (and a running timer) alive in the Dock and menu bar,
+/// supplies the Dock icon's right-click menu, and takes shared links (universal links).
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    /// A shared https://unreasonable.eco/timer link clicked anywhere macOS hands universal links
+    /// to apps (Safari, Mail, Messages…), once the app is signed with its associated domain.
+    func application(
+        _ application: NSApplication,
+        continue userActivity: NSUserActivity,
+        restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
+    ) -> Bool {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb, let url = userActivity.webpageURL else {
+            return false
+        }
+        TimerController.shared.handle(url: url)
+        return true
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

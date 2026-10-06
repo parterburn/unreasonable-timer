@@ -2,12 +2,14 @@
 // of the nth match (in the order the accessibility tree lists them, from 1), or of the first
 // whose label (description, title or identifier) is the given text, as "x y" (global, top-left origin,
 // like CGWindowList bounds), for scripts/ci-screenshots.sh to click; or with `value`, prints
-// its value. `list` prints every match with its label and value, to see what's there.
+// its value; or with `press`, presses it (a menu item, say). `list` prints every match with
+// its labels and value, to see what's there.
 //   swiftc scripts/ax-find.swift -o ax-find
 //   ./ax-find "Unreasonable Timer" AXSearchField
 //   ./ax-find "Unreasonable Timer" AXTextField 2 value
 //   ./ax-find "Unreasonable Timer" AXTextField "Size of the timer"
 //   ./ax-find "Unreasonable Timer" AXTextField list
+//   ./ax-find "Unreasonable Timer" AXMenuItem "Copy Link" press
 import AppKit
 import ApplicationServices
 
@@ -19,6 +21,7 @@ guard args.count >= 3, args.count <= 5 else {
 let wanted = args[2]
 let selector = args.count >= 4 ? args[3] : "1"
 let printValue = args.count == 5 && args[4] == "value"
+let press = args.count == 5 && args[4] == "press"
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -74,6 +77,11 @@ if let index = Int(selector) {
 
 if printValue {
     print(value(element, kAXValueAttribute) as? String ?? "")
+    exit(0)
+}
+if press {
+    let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+    guard result == .success else { fail("ax-find: pressing it failed (\(result.rawValue))") }
     exit(0)
 }
 

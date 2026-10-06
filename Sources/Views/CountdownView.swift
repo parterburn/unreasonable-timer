@@ -231,6 +231,9 @@ struct CountdownView: View {
             .keyboardShortcut("f", modifiers: [])
         Button("Edit Timer") { controller.edit() }
             .keyboardShortcut(.escape, modifiers: [])
+        Divider()
+        Button("Copy Link") { controller.copyLink(for: config) }
+        ShareLink("Share…", item: controller.shareLink(for: config))
     }
 
     // MARK: Progress bar
