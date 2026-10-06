@@ -370,9 +370,10 @@ struct SetupView: View {
 
     /// The preview stays in view above the scrolling form, so every change shows as it's made.
     private func previewHeader(height: CGFloat) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 14) {
             CountdownPreview(config: draft.previewConfig, moment: previewMoment)
                 .frame(height: height)
+            // Full-size tabs as wide as the preview, like the ones in System Settings ▸ Trackpad.
             Picker("Preview", selection: $previewMoment) {
                 ForEach(PreviewMoment.allCases, id: \.self) { moment in
                     Text(moment.title).tag(moment)
@@ -380,13 +381,13 @@ struct SetupView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
+            .controlSize(.large)
+            .frame(width: max(height * CountdownPreview.aspectRatio, 380))
             .help("Which moment of the countdown to preview")
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
-        .padding(.bottom, 12)
+        .padding(.bottom, 16)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }
@@ -634,6 +635,7 @@ private struct CountdownPreview: View {
     let moment: PreviewMoment
 
     private static let canvas = CGSize(width: 1280, height: 800)
+    static var aspectRatio: CGFloat { canvas.width / canvas.height }
 
     /// The engine's own state at that moment: 12 seconds left, or 42 seconds past zero.
     private var snapshot: TimerEngine.Snapshot {
@@ -677,7 +679,7 @@ private struct CountdownPreview: View {
             .scaleEffect(geo.size.width / canvas.width, anchor: .topLeading)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
         }
-        .aspectRatio(canvas.width / canvas.height, contentMode: .fit)
+        .aspectRatio(Self.aspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(.separator, lineWidth: 1))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
