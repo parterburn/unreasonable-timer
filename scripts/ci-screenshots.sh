@@ -28,6 +28,8 @@ JSON
 
 WINDOW_ID_TOOL="${RUNNER_TEMP:-/tmp}/window-id"
 swiftc -O scripts/window-id.swift -o "$WINDOW_ID_TOOL"
+HOLD_KEY_TOOL="${RUNNER_TEMP:-/tmp}/hold-key"
+swiftc -O scripts/hold-key.swift -o "$HOLD_KEY_TOOL"
 
 system_profiler SPDisplaysDataType | grep -E "Resolution|UI Looks like" || true
 
@@ -68,6 +70,15 @@ sleep 5;  capture countdown-6-done
 
 open "untimer://start?time=20&theme=light&lead=$LEAD"
 sleep 3;  capture countdown-7-light
+
+# Holding ↑ from 1:00: one press plus 20 repeats is 21 steps of 15 seconds, so 6:15.
+open "untimer://open?time=60"
+sleep 3;  "$HOLD_KEY_TOOL" up 20
+sleep 1;  capture keys-1-held-up-expect-6m15s
+# Holding ↓ from 0:50: 0:35, 0:20, 0:05, then the repeats stop short of zero.
+open "untimer://open?time=50"
+sleep 3;  "$HOLD_KEY_TOOL" down 10
+sleep 1;  capture keys-2-held-down-expect-5s
 
 open "untimer://edit?time=600&theme=light"
 sleep 3;  capture setup-light

@@ -40,7 +40,7 @@ struct CountdownView: View {
         .focusable()
         .focused($hasFocus)
         .focusEffectDisabled()
-        .onKeyPress(phases: .down) { handleKey($0) }
+        .onKeyPress(phases: [.down, .repeat]) { handleKey($0) }
         .onContinuousHover { phase in
             if case .active = phase { wake() }
         }
@@ -57,19 +57,30 @@ struct CountdownView: View {
 
     // MARK: Keys
 
-    /// Space, ↑/↓, R, F, as on the web page, plus Esc to leave fullscreen.
+    /// Space, ↑/↓, R, F, as on the web page, plus Esc to leave fullscreen. Holding ↑/↓ keeps
+    /// adjusting at the system key-repeat rate; the other keys act once per press.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
         if !press.modifiers.intersection([.command, .control, .option]).isEmpty { return .ignored }
 
         switch press.key {
-        case .space:
-            controller.toggle()
-            return .handled
         case .upArrow:
             controller.adjust(by: TimerEngine.adjustStep)
             return .handled
         case .downArrow:
+            // Holding ↓ stops at the last step above zero, so trimming time can't run into
+            // "time is up" in front of the room; a fresh press goes the rest of the way.
+            if press.phase == .repeat && snap.remaining <= TimerEngine.adjustStep { return .handled }
             controller.adjust(by: -TimerEngine.adjustStep)
+            return .handled
+        default:
+            break
+        }
+
+        if press.phase == .repeat { return .handled }
+
+        switch press.key {
+        case .space:
+            controller.toggle()
             return .handled
         case .escape:
             if controller.isFullscreen {

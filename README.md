@@ -15,7 +15,7 @@ light or dark theme. **Start Timer** opens the countdown paused, as the web page
 | Key | Action |
 | --- | --- |
 | Space or click | Start / pause (after zero, reset) |
-| ↑ / ↓ | Add / remove 15 seconds |
+| ↑ / ↓ | Add / remove 15 seconds; hold to keep going (holding ↓ stops just above zero) |
 | R | Reset |
 | F | Fullscreen on the selected display |
 | Esc | Leave fullscreen |
